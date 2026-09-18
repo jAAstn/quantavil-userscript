@@ -27,6 +27,7 @@ export class ProgressBar extends UIComponent {
 		this.element = this.render();
 		this.setupSubscriptions();
 		this.setupPointerListeners();
+		this.updateDisplay();
 	}
 
 	protected render(): HTMLDivElement {

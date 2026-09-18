@@ -228,10 +228,10 @@ export class StateStore {
 			);
 		}
 
-		const rawTheme = this.storageGet(this.getStorageKey("theme"), "halo");
+		const rawTheme = this.storageGet(this.getStorageKey("theme"), "contrast");
 		const theme = (MVC_THEMES as readonly string[]).includes(rawTheme)
 			? rawTheme
-			: "halo";
+			: "contrast";
 
 		this.settings = {
 			skipSeconds: this.storageGet(
@@ -259,7 +259,7 @@ export class StateStore {
 			),
 			progressBarEnabled: this.storageGet(
 				this.getStorageKey("progressBarEnabled"),
-				true,
+				false,
 			),
 			minimalSpeedFab: this.storageGet(
 				this.getStorageKey("minimalSpeedFab"),

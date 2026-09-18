@@ -7,10 +7,9 @@
  * fullscreen element, so <html> is the one ancestor all of them share.
  */
 const THEMES = `
-        /* ── HALO (default) ────────────────────────────────────────────
+        /* ── HALO ──────────────────────────────────────────────────────
            No surfaces at all. Each glyph carries its own dark outline —
            the subtitle solution. Nothing is drawn over the picture. */
-        :root,
         :root[data-mvc-theme="halo"] {
             --mvc-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
             --mvc-surface: transparent;
@@ -42,9 +41,10 @@ const THEMES = `
             --mvc-track-h: 3px;
         }
 
-        /* ── HIGH CONTRAST ─────────────────────────────────────────────
+        /* ── HIGH CONTRAST (default) ───────────────────────────────────
            Near-opaque solids, amber, squared. Readable in sunlight and on
            washed-out panels. Zero blur, zero shadow. */
+        :root,
         :root[data-mvc-theme="contrast"] {
             --mvc-font: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
             --mvc-surface: rgba(8, 9, 10, 0.92);
@@ -1068,11 +1068,11 @@ ${THEMES}
 	document.head.appendChild(style);
 }
 
-export const MVC_THEMES = ["halo", "contrast", "frame"] as const;
+export const MVC_THEMES = ["contrast", "halo", "frame"] as const;
 export type MvcTheme = (typeof MVC_THEMES)[number];
 export const MVC_THEME_LABELS: Record<MvcTheme, string> = {
-	halo: "Halo",
 	contrast: "High Contrast",
+	halo: "Halo",
 	frame: "Frame",
 };
 

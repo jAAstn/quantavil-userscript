@@ -37,6 +37,7 @@ describe("ProgressBar Component", () => {
 	});
 
 	it("should update track widths when video:time-update fires", () => {
+		store.saveSetting("progressBarEnabled", true);
 		eventBus.emit("video:time-update", {
 			currentTime: 60,
 			duration: 120,
@@ -111,13 +112,16 @@ describe("ProgressBar Component", () => {
 		expect(trackWrap.classList.contains("dragging")).toBe(false);
 	});
 
-	it("should hide progress bar element when progressBarEnabled setting is false", () => {
-		store.saveSetting("progressBarEnabled", false);
+	it("should hide progress bar element by default when progressBarEnabled is false", () => {
 		expect(progressBar.dom.style.display).toBe("none");
 
 		store.saveSetting("progressBarEnabled", true);
 		progressBar.updateDisplay();
 		expect(progressBar.dom.style.display).toBe("");
+
+		store.saveSetting("progressBarEnabled", false);
+		progressBar.updateDisplay();
+		expect(progressBar.dom.style.display).toBe("none");
 	});
 
 	it("should have slider role and handle keyboard arrow seeking", () => {

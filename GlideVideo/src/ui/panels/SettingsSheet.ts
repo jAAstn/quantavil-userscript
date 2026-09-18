@@ -12,7 +12,7 @@ import type { UIManager } from "../UIManager";
 const TOGGLES: Array<{ label: string; key: string; def: boolean }> = [
 	{ label: "Speed FAB", key: "minimalSpeedFab", def: false },
 	{ label: "Left hand", key: "leftHandMode", def: false },
-	{ label: "Progress bar", key: "progressBarEnabled", def: true },
+	{ label: "Progress bar", key: "progressBarEnabled", def: false },
 	{ label: "Gestures", key: "gesturesEnabled", def: true },
 	{ label: "Remember", key: "rememberPlayback", def: true },
 	{ label: "Page scroll", key: "scrollCompatibility", def: true },
@@ -64,7 +64,7 @@ export class SettingsSheet extends UIComponent {
 		this.addStepper(
 			card,
 			"Theme",
-			(i) => MVC_THEME_LABELS[MVC_THEMES[i] as MvcTheme] ?? "Halo",
+			(i) => MVC_THEME_LABELS[MVC_THEMES[i] as MvcTheme] ?? "High Contrast",
 			() => Math.max(0, MVC_THEMES.indexOf(this.store.settings.theme as MvcTheme)),
 			(dir) => {
 				const n = MVC_THEMES.length;
@@ -165,7 +165,7 @@ export class SettingsSheet extends UIComponent {
 			e.stopPropagation();
 			vibrate(MVC_CONFIG.HAPTIC_VIBRATION_MS);
 			this.store.saveSetting("transform", { ratio: "fit", zoom: 1, rot: 0 });
-			this.store.saveSetting("theme", "halo");
+			this.store.saveSetting("theme", "contrast");
 			this.store.saveSetting("defaultSpeed", MVC_CONFIG.SPEED_DEFAULT);
 			this.store.saveSetting("skipSeconds", MVC_CONFIG.SKIP_DEFAULT);
 			this.store.saveSetting("lastRate", MVC_CONFIG.SPEED_DEFAULT);

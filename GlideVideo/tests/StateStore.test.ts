@@ -40,6 +40,8 @@ describe('StateStore', () => {
         expect(store.settings.lastRate).toBe(1.0);
         expect(store.settings.gesturesEnabled).toBe(true);
         expect(store.settings.transform.zoom).toBe(1);
+        expect(store.settings.theme).toBe('contrast');
+        expect(store.settings.progressBarEnabled).toBe(false);
     });
 
     it('should load saved settings from localStorage', () => {
@@ -55,14 +57,14 @@ describe('StateStore', () => {
         expect(store.settings.theme).toBe('contrast');
     });
 
-    it('should fallback to halo theme when stored theme is terminal or invalid', () => {
+    it('should fallback to contrast theme when stored theme is terminal or invalid', () => {
         mockStorage['mvc_theme'] = JSON.stringify('terminal');
         const storeTerminal = new StateStore(eventBus);
-        expect(storeTerminal.settings.theme).toBe('halo');
+        expect(storeTerminal.settings.theme).toBe('contrast');
 
         mockStorage['mvc_theme'] = JSON.stringify('non_existent_theme');
         const storeInvalid = new StateStore(eventBus);
-        expect(storeInvalid.settings.theme).toBe('halo');
+        expect(storeInvalid.settings.theme).toBe('contrast');
     });
 
     it('should save setting, emit change event, and write to localStorage debounced', () => {

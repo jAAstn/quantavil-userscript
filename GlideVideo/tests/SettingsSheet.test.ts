@@ -69,15 +69,15 @@ describe("SettingsSheet", () => {
 		expect(store.settings.gesturesEnabled).toBe(true);
 		expect(store.settings.minimalSpeedFab).toBe(false);
 		expect(store.settings.leftHandMode).toBe(false);
-		expect(store.settings.theme).toBe("halo");
+		expect(store.settings.theme).toBe("contrast");
 		expect(store.settings.transform.rot).toBe(0);
 		expect(store.settings.lastRate).toBe(1.0);
 		expect(speedSpy).toHaveBeenCalled();
 		expect(posSpy).toHaveBeenCalled();
 
 		const checked = sheet().querySelectorAll(".mvc-switch.checked");
-		// Every toggle but minimalSpeedFab and leftHandMode defaults to on (4 total)
-		expect(checked).toHaveLength(4);
+		// Every toggle but minimalSpeedFab, leftHandMode, and progressBarEnabled defaults to on (3 total)
+		expect(checked).toHaveLength(3);
 	});
 
 	it("theme stepper cycles through every theme and wraps", () => {
@@ -87,28 +87,28 @@ describe("SettingsSheet", () => {
 		) as HTMLElement[];
 		const val = themeRow.querySelector(".mvc-stepper-val")!;
 
-		expect(val.textContent).toBe("Halo");
+		expect(val.textContent).toBe("High Contrast");
 		inc.click();
-		expect(store.settings.theme).toBe("contrast");
+		expect(store.settings.theme).toBe("halo");
 		inc.click();
 		expect(store.settings.theme).toBe("frame");
 		inc.click();
-		expect(store.settings.theme).toBe("halo"); // wraps forward
+		expect(store.settings.theme).toBe("contrast"); // wraps forward
 		dec.click();
 		expect(store.settings.theme).toBe("frame"); // wraps backward
 	});
 
-	it("theme stepper handles invalid theme safely and falls back to Halo label", () => {
+	it("theme stepper handles invalid theme safely and falls back to High Contrast label", () => {
 		store.settings.theme = "invalid_theme";
 		ui.settingsSheet!.update();
 
 		const themeRow = rows()[0];
 		const val = themeRow.querySelector(".mvc-stepper-val")!;
-		expect(val.textContent).toBe("Halo");
+		expect(val.textContent).toBe("High Contrast");
 
 		const inc = themeRow.querySelectorAll(".mvc-stepper-btn")[1] as HTMLElement;
 		inc.click();
-		expect(store.settings.theme).toBe("contrast");
+		expect(store.settings.theme).toBe("halo");
 	});
 
 	it("should provide switch role, aria-checked, keyboard toggle, and label association", () => {
