@@ -77,6 +77,13 @@ export class StateStore {
 
 	public brightness = 1.0;
 	public isScreenLocked = false;
+	get isLocked(): boolean {
+		return this.isScreenLocked;
+	}
+	set isLocked(val: boolean) {
+		this.isScreenLocked = val;
+	}
+	public positions: Record<string, number> = {};
 
 	// Internal rate fighting states
 	get _rateOverrideCount(): number {
@@ -202,6 +209,7 @@ export class StateStore {
 
 	public clearAllVideoPositions(): void {
 		this.positions = {};
+		this.storageSet(this.getStorageKey("positions"), {});
 		try {
 			if (typeof GM_deleteValue !== "undefined") {
 				GM_deleteValue(this.getStorageKey("positions"));

@@ -109,6 +109,7 @@ describe('VideoTransform', () => {
         // Mock UI element structures
         const mockElement = () => ({
             style: { left: '', top: '', right: '', bottom: '', transform: '', objectFit: '', visibility: '', display: '', position: '' },
+            classList: { add: vi.fn(), remove: vi.fn(), contains: vi.fn().mockReturnValue(false) },
             dataset: {},
             offsetWidth: 100,
             offsetHeight: 50,

@@ -171,7 +171,7 @@
 	function debounce(func, wait, maxWait) {
 		let timeout;
 		let firstCallAt = 0;
-		return (...args) => {
+		const debounced = (...args) => {
 			const now = Date.now();
 			if (!timeout) firstCallAt = now;
 			if (maxWait !== void 0 && now - firstCallAt >= maxWait) {
@@ -186,6 +186,13 @@
 				func(...args);
 			}, wait);
 		};
+		debounced.cancel = () => {
+			if (timeout) {
+				clearTimeout(timeout);
+				timeout = void 0;
+			}
+		};
+		return debounced;
 	}
 	function isPlaying(v) {
 		if (!v) return false;
@@ -1149,7 +1156,10 @@ ${THEMES}
         /* The sheet is modal: transient overlays never share the frame */
         .mvc-settings-sheet.visible ~ .mvc-toast,
         .mvc-settings-sheet.visible ~ .mvc-gesture-overlay,
-        .mvc-settings-sheet.visible ~ .mvc-doubletap-container {
+        .mvc-settings-sheet.visible ~ .mvc-doubletap-container,
+        .mvc-modal-open .mvc-toast,
+        .mvc-modal-open .mvc-gesture-overlay,
+        .mvc-modal-open .mvc-doubletap-container {
             display: none !important;
         }
 
@@ -1451,6 +1461,14 @@ ${THEMES}
             color: var(--mvc-accent);
             opacity: 0.3;
             line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .mvc-doubletap-chevron svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor !important;
         }
 
         .mvc-doubletap-panel.right .mvc-doubletap-chevron:nth-child(1) { animation: mvc-chev-wave 1s ease-in-out infinite; animation-delay: 0s; }
@@ -1509,6 +1527,16 @@ ${THEMES}
             font-size: 13px;
             line-height: 1;
             flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--mvc-text);
+        }
+        .mvc-volume-icon svg,
+        .mvc-brightness-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor !important;
         }
 
         .mvc-volume-track,
@@ -1579,12 +1607,70 @@ ${THEMES}
             overflow: visible !important;
         }
 
+        @media (max-width: 480px) {
+            .mvc-top-bar {
+                gap: 4px;
+                left: max(8px, env(safe-area-inset-left, 8px));
+                right: max(8px, env(safe-area-inset-right, 8px));
+            }
+            .mvc-stepper-pill {
+                padding: 2px 6px;
+                gap: 4px;
+            }
+            .mvc-stepper-pill-val {
+                min-width: 36px;
+                font-size: 11px;
+            }
+            .mvc-stepper-pill-btn {
+                width: 22px;
+                height: 22px;
+            }
+            .mvc-progress-bar {
+                min-width: 36px;
+                padding: 0 2px;
+            }
+            .mvc-controls-group {
+                gap: 4px;
+            }
+            .mvc-controls-row {
+                gap: 4px;
+            }
+            .mvc-settings-btn,
+            .mvc-pip-btn,
+            .mvc-lock-btn,
+            .mvc-ratio-btn,
+            .mvc-collapse-btn,
+            .mvc-speed-fab {
+                width: 30px;
+                height: 30px;
+            }
+            .mvc-settings-btn svg,
+            .mvc-pip-btn svg,
+            .mvc-lock-btn svg,
+            .mvc-ratio-btn svg {
+                width: 15px;
+                height: 15px;
+            }
+        }
+
+        /* ── Focus-visible styles for keyboard accessibility ─────────── */
+        button:focus-visible,
+        [role="button"]:focus-visible,
+        [role="switch"]:focus-visible,
+        [role="slider"]:focus-visible {
+            outline: 2px solid var(--mvc-accent);
+            outline-offset: 2px;
+        }
+
         @media (prefers-reduced-motion: reduce) {
+            .mvc-ui-wrap,
             .mvc-top-bar *,
             .mvc-settings-sheet,
             .mvc-toast,
             .mvc-volume-bar,
-            .mvc-brightness-bar {
+            .mvc-brightness-bar,
+            .mvc-doubletap-chevron,
+            .mvc-doubletap-panel {
                 transition-duration: 0.01ms !important;
                 animation-duration: 0.01ms !important;
             }
@@ -1649,6 +1735,39 @@ ${THEMES}
 		render() {
 			const wrap = document.createElement("div");
 			wrap.className = "mvc-progress-bar";
+			wrap.setAttribute("role", "slider");
+			wrap.setAttribute("tabindex", "0");
+			wrap.setAttribute("aria-label", "Seek video");
+			wrap.setAttribute("aria-valuemin", "0");
+			wrap.setAttribute("aria-valuemax", "100");
+			wrap.setAttribute("aria-valuenow", "0");
+			wrap.addEventListener("keydown", (e) => {
+				if (e.key === "ArrowRight") {
+					e.preventDefault();
+					e.stopPropagation();
+					const step = this.ui.store.settings.skipSeconds || MVC_CONFIG.SKIP_DEFAULT;
+					this.eventBus.emit("video:skip-requested", {
+						dir: 1,
+						customSeconds: step
+					});
+				} else if (e.key === "ArrowLeft") {
+					e.preventDefault();
+					e.stopPropagation();
+					const step = this.ui.store.settings.skipSeconds || MVC_CONFIG.SKIP_DEFAULT;
+					this.eventBus.emit("video:skip-requested", {
+						dir: -1,
+						customSeconds: step
+					});
+				} else if (e.key === "Home") {
+					e.preventDefault();
+					e.stopPropagation();
+					this.eventBus.emit("video:seek-requested", { time: 0 });
+				} else if (e.key === "End") {
+					e.preventDefault();
+					e.stopPropagation();
+					this.eventBus.emit("video:seek-requested", { time: this.duration });
+				}
+			});
 			this.trackWrap = document.createElement("div");
 			this.trackWrap.className = "mvc-progress-track-wrap";
 			const bgTrack = document.createElement("div");
@@ -1702,6 +1821,7 @@ ${THEMES}
 			this.bufTrack.style.width = `${bufPct}%`;
 			this.fillTrack.style.width = `${pct}%`;
 			this.thumbEl.style.left = `${pct}%`;
+			this.element.setAttribute("aria-valuenow", String(Math.round(pct)));
 		}
 		setupPointerListeners() {
 			const onPointerDown = (e) => {
@@ -1789,7 +1909,16 @@ ${THEMES}
 		lock: "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z",
 		unlock: "M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z",
 		ratio: "M19 4H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H5V6h14v12z",
-		chevron: "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"
+		chevron: "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z",
+		"chev-left": "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z",
+		"chev-right": "M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z",
+		"vol-mute": "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z",
+		"vol-low": "M7 9v6h4l5 5V4l-5 5H7z",
+		"vol-mid": "M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z",
+		"vol-high": "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
+		"bright-low": "M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69zM12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-10c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z",
+		"bright-mid": "M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69zM12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-10v8c2.21 0 4-1.79 4-4s-1.79-4-4-4z",
+		"bright-high": "M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69zM12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"
 	};
 	function getSvgIcon(name) {
 		const svgNS = "http://www.w3.org/2000/svg";
@@ -1805,6 +1934,7 @@ ${THEMES}
 	}
 	//#endregion
 	//#region src/ui/components/settingsRow.ts
+	var rowIdCounter = 0;
 	/**
 	* One labelled row in the settings sheet. `half` rows sit two-per-line in the
 	* sheet's grid; everything else spans the full width.
@@ -1812,9 +1942,12 @@ ${THEMES}
 	function settingsRow(label, control, half = false) {
 		const row = document.createElement("div");
 		row.className = half ? "mvc-settings-row half" : "mvc-settings-row";
+		const id = control.id || `mvc-ctrl-${++rowIdCounter}`;
+		control.id = id;
 		const labelEl = document.createElement("label");
 		labelEl.className = "mvc-settings-label";
 		labelEl.textContent = label;
+		labelEl.htmlFor = id;
 		row.append(labelEl, control);
 		return row;
 	}
@@ -1879,25 +2012,40 @@ ${THEMES}
 			this.onChange = onChange;
 			this.element = this.render();
 		}
+		toggle() {
+			vibrate(10);
+			const isChecked = !this.checked;
+			this.setChecked(isChecked);
+			this.onChange(isChecked);
+		}
 		render() {
 			this.switchContainer = document.createElement("div");
 			this.switchContainer.className = "mvc-switch";
+			this.switchContainer.setAttribute("role", "switch");
+			this.switchContainer.setAttribute("tabindex", "0");
+			this.switchContainer.setAttribute("aria-label", this.label);
+			this.switchContainer.setAttribute("aria-checked", String(this.checked));
 			if (this.checked) this.switchContainer.classList.add("checked");
 			const switchThumb = document.createElement("div");
 			switchThumb.className = "mvc-switch-thumb";
 			this.switchContainer.appendChild(switchThumb);
 			this.switchContainer.onclick = (e) => {
 				e.stopPropagation();
-				vibrate(10);
-				const isChecked = this.switchContainer.classList.toggle("checked");
-				this.checked = isChecked;
-				this.onChange(isChecked);
+				this.toggle();
+			};
+			this.switchContainer.onkeydown = (e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					e.stopPropagation();
+					this.toggle();
+				}
 			};
 			return settingsRow(this.label, this.switchContainer, true);
 		}
 		setChecked(checked) {
 			this.checked = checked;
 			this.switchContainer.classList.toggle("checked", checked);
+			this.switchContainer.setAttribute("aria-checked", String(checked));
 		}
 	};
 	//#endregion
@@ -2020,6 +2168,9 @@ ${THEMES}
 				this.store.saveSetting("theme", "halo");
 				this.store.saveSetting("defaultSpeed", MVC_CONFIG.SPEED_DEFAULT);
 				this.store.saveSetting("skipSeconds", MVC_CONFIG.SKIP_DEFAULT);
+				this.store.saveSetting("lastRate", MVC_CONFIG.SPEED_DEFAULT);
+				this.store.clearDomainSpeed();
+				this.store.clearAllVideoPositions();
 				for (const { key, def } of TOGGLES) this.store.saveSetting(key, def);
 				this.update();
 				this.eventBus.emit("video:transform-need-update", void 0);
@@ -2063,13 +2214,18 @@ ${THEMES}
 			this.decBtn = document.createElement("button");
 			this.decBtn.className = "mvc-stepper-pill-btn mvc-btn-dec";
 			this.decBtn.textContent = "−";
+			this.decBtn.setAttribute("aria-label", "Decrease speed");
 			this.setupButtonHold(this.decBtn, -1);
 			this.valEl = document.createElement("span");
 			this.valEl.className = "mvc-stepper-pill-val";
+			this.valEl.setAttribute("role", "button");
+			this.valEl.setAttribute("tabindex", "0");
+			this.valEl.setAttribute("aria-label", "Playback speed: tap to play or pause, hold to reset to 1x");
 			this.setupValHandlers(this.valEl);
 			this.incBtn = document.createElement("button");
 			this.incBtn.className = "mvc-stepper-pill-btn mvc-btn-inc";
 			this.incBtn.textContent = "+";
+			this.incBtn.setAttribute("aria-label", "Increase speed");
 			this.setupButtonHold(this.incBtn, 1);
 			this.stepperPill.append(this.decBtn, this.valEl, this.incBtn);
 			this.fabBtn = document.createElement("button");
@@ -2229,6 +2385,15 @@ ${THEMES}
 			const cancelLongPress = () => {
 				clearTimeout(this.longPressTimeout);
 			};
+			const triggerPlayPause = () => {
+				const video = this.ui.store.activeVideo;
+				this.eventBus.emit("video:play-pause-requested", void 0);
+				vibrate(10);
+				if (video) {
+					const willPlay = video.paused || video.ended;
+					this.ui.showToast(willPlay ? "Playing" : "Paused");
+				}
+			};
 			el.addEventListener("pointerup", (e) => {
 				e.stopPropagation();
 				cancelLongPress();
@@ -2236,12 +2401,13 @@ ${THEMES}
 					this.wasLongPress = false;
 					return;
 				}
-				const video = this.ui.store.activeVideo;
-				if (video) {
-					const willPlay = video.paused || video.ended;
-					this.eventBus.emit("video:play-pause-requested", void 0);
-					vibrate(10);
-					this.ui.showToast(willPlay ? "Playing" : "Paused");
+				triggerPlayPause();
+			});
+			el.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					e.stopPropagation();
+					triggerPlayPause();
 				}
 			});
 			el.addEventListener("pointerleave", cancelLongPress);
@@ -2259,6 +2425,7 @@ ${THEMES}
 		eventBus;
 		store;
 		wrap = null;
+		topBar = null;
 		stepper = null;
 		progressBar = null;
 		settingsBtn = null;
@@ -2403,10 +2570,10 @@ ${THEMES}
 				const panel = this.createEl("div", `mvc-doubletap-panel ${dir}`);
 				const inner = this.createEl("div", "mvc-doubletap-inner");
 				const chevrons = this.createEl("div", "mvc-doubletap-chevrons");
-				const icon = dir === "left" ? "❮" : "❯";
+				const iconName = dir === "left" ? "chev-left" : "chev-right";
 				for (let i = 0; i < 3; i++) {
 					const ch = this.createEl("span", "mvc-doubletap-chevron");
-					ch.textContent = icon;
+					ch.appendChild(this.getIcon(iconName));
 					chevrons.appendChild(ch);
 				}
 				const text = this.createEl("div", "mvc-doubletap-text");
@@ -2541,6 +2708,7 @@ ${THEMES}
 			controlsGroup.appendChild(controlsRow);
 			controlsGroup.appendChild(this.collapseBtn);
 			const topBar = this.createEl("div", "mvc-top-bar");
+			this.topBar = topBar;
 			topBar.append(this.stepper.dom, this.progressBar.dom, controlsGroup);
 			wrap.appendChild(topBar);
 			container.appendChild(wrap);
@@ -2627,10 +2795,14 @@ ${THEMES}
 		toggleMenu(menuEl, anchorEl) {
 			const isOpen = menuEl.classList.contains("visible");
 			this.hideAllMenus();
-			if (isOpen) return;
+			if (isOpen) {
+				this.updateModalState();
+				return;
+			}
 			menuEl.classList.add("visible");
 			anchorEl.classList.add("visible");
 			this.showBackdrop();
+			this.updateModalState();
 			clearTimeout(this.store.timers.hide);
 		}
 		showBackdrop() {
@@ -2643,8 +2815,15 @@ ${THEMES}
 				this.settingsBtn?.classList.remove("visible");
 			}
 			if (this.backdrop) this.backdrop.classList.remove("visible");
+			this.updateModalState();
 			this.eventBus.emit("control:visibility-requested", { visible: true });
 			this.resetCollapseTimer();
+		}
+		updateModalState() {
+			const isModalOpen = Boolean(this.settingsSheet && this.settingsSheet.dom.classList.contains("visible"));
+			const container = getFullscreenContainer();
+			if (container) container.classList.toggle("mvc-modal-open", isModalOpen);
+			if (this.wrap?.parentElement) this.wrap.parentElement.classList.toggle("mvc-modal-open", isModalOpen);
 		}
 		updateSettingsTransformUI() {
 			if (!this.settingsSheet || !this.settingsSheet.dom.classList.contains("visible")) return;
@@ -2704,6 +2883,7 @@ ${THEMES}
 			if (!this.wrap || !this.store.activeVideo || this.store.savedPlaybackRate !== void 0) return;
 			if (!force && Date.now() - this.store.lastRealUserEvent >= MVC_CONFIG.INTERACTION_TIMEOUT) return;
 			this.wrap.style.display = "block";
+			this.updateTopBarPosition();
 			this.wrap.offsetHeight;
 			this.wrap.style.opacity = "1";
 			this.wrap.classList.add("mvc-shown");
@@ -2787,7 +2967,8 @@ ${THEMES}
 			const pct = Math.round(volume * 100);
 			this.volumeFill.style.height = `${Math.min(pct, 100)}%`;
 			this.volumeValue.textContent = `${pct}%`;
-			this.volumeIcon.textContent = volume === 0 ? "🔇" : volume < .4 ? "🔈" : volume < .7 ? "🔉" : "🔊";
+			const volIconName = volume === 0 ? "vol-mute" : volume < .4 ? "vol-low" : volume < .7 ? "vol-mid" : "vol-high";
+			this.volumeIcon.replaceChildren(this.getIcon(volIconName));
 			this.volumeBar.classList.add("visible");
 			clearTimeout(this.store.timers.volumeBarHide);
 			this.store.timers.volumeBarHide = setTimeout(() => {
@@ -2804,7 +2985,8 @@ ${THEMES}
 			const pct = Math.round(brightness * 100);
 			this.brightnessFill.style.height = `${pct}%`;
 			this.brightnessValue.textContent = `${pct}%`;
-			this.brightnessIcon.textContent = brightness < .4 ? "🌑" : brightness < .7 ? "🌓" : "☀️";
+			const brightIconName = brightness < .4 ? "bright-low" : brightness < .7 ? "bright-mid" : "bright-high";
+			this.brightnessIcon.replaceChildren(this.getIcon(brightIconName));
 			this.brightnessBar.classList.add("visible");
 			clearTimeout(this.store.timers.brightnessBarHide);
 			this.store.timers.brightnessBarHide = setTimeout(() => {
@@ -2828,6 +3010,25 @@ ${THEMES}
 			};
 			if (this.lockShield) Object.assign(this.lockShield.style, box);
 			if (this.frameEl) Object.assign(this.frameEl.style, box);
+		}
+		updateTopBarPosition() {
+			if (!this.topBar || !this.store.activeVideo) return;
+			if (!!(document.fullscreenElement || document.webkitFullscreenElement)) {
+				this.topBar.style.top = "";
+				this.topBar.style.left = "";
+				this.topBar.style.right = "";
+				this.topBar.style.width = "";
+				return;
+			}
+			const rect = this.store.activeVideo.getBoundingClientRect();
+			const pad = 16;
+			const top = clamp(rect.top + pad, pad, window.innerHeight - 50);
+			const left = clamp(rect.left + pad, pad, window.innerWidth - pad);
+			const width = Math.max(0, rect.width - 32);
+			this.topBar.style.top = `${top}px`;
+			this.topBar.style.left = `${left}px`;
+			this.topBar.style.width = `${width}px`;
+			this.topBar.style.right = "auto";
 		}
 		expandControlsRow() {
 			if (!this.controlsRow) return;
@@ -2891,7 +3092,9 @@ ${THEMES}
 	var REEVALUATE_ON = [
 		"play",
 		"loadedmetadata",
-		"volumechange"
+		"volumechange",
+		"loadstart",
+		"emptied"
 	];
 	var VideoTracker = class {
 		eventBus;
@@ -2942,6 +3145,7 @@ ${THEMES}
 			this.watched.delete(v);
 		}
 		destroy() {
+			this.debouncedEvaluate.cancel?.();
 			if (this.intersectionObserver) this.intersectionObserver.disconnect();
 			if (this.mutationObserver) this.mutationObserver.disconnect();
 			if (this.resizeObserver) this.resizeObserver.disconnect();
@@ -2959,8 +3163,14 @@ ${THEMES}
 		}
 		evaluateActive() {
 			if (this.store.activeVideo && isPlaying(this.store.activeVideo) && this.store.activeVideo.isConnected && this.store.visibleVideos.has(this.store.activeVideo)) {
-				const r = this.store.activeVideo.getBoundingClientRect();
-				if (r.height > MVC_CONFIG.MIN_VIDEO_HEIGHT && r.bottom > 0 && r.top < window.innerHeight) return;
+				const active = this.store.activeVideo;
+				const isHidden = getComputedStyle(active).visibility === "hidden";
+				const ignored = this.adapter.shouldIgnoreVideo(active);
+				const r = active.getBoundingClientRect();
+				const area = r.width * r.height;
+				const linkedInvalid = Boolean(active.closest?.("a")) && (r.width < MVC_CONFIG.LINKED_VIDEO_MIN_WIDTH || r.height < MVC_CONFIG.LINKED_VIDEO_MIN_HEIGHT);
+				const smallMuted = r.height < MVC_CONFIG.SMALL_MUTED_VIDEO_HEIGHT && active.muted;
+				if (!isHidden && !ignored && !linkedInvalid && !smallMuted && area >= MVC_CONFIG.MIN_VIDEO_AREA && r.height > MVC_CONFIG.MIN_VIDEO_HEIGHT && r.bottom > 0 && r.top < window.innerHeight) return;
 			}
 			let best = null;
 			let bestScore = -1;
@@ -2998,7 +3208,13 @@ ${THEMES}
 			const root = document.body || document.documentElement;
 			this.mutationObserver.observe(root, {
 				childList: true,
-				subtree: true
+				subtree: true,
+				attributes: true,
+				attributeFilter: [
+					"style",
+					"class",
+					"hidden"
+				]
 			});
 			this.observeShadowRoots(document);
 		}
@@ -3029,7 +3245,13 @@ ${THEMES}
 		handleMutation(mutations) {
 			let activeVideoRemoved = false;
 			let removedNodesPresent = false;
+			let attributeChanged = false;
 			mutations.forEach((mutation) => {
+				if (mutation.type === "attributes") {
+					const target = mutation.target;
+					if (target.tagName === "VIDEO" || target.querySelector?.("video") || this.store.activeVideo && target.contains?.(this.store.activeVideo)) attributeChanged = true;
+					return;
+				}
 				if (mutation.addedNodes.length) mutation.addedNodes.forEach((node) => {
 					if (node.nodeType === 1) this.pendingAddedElements.push(node);
 				});
@@ -3050,7 +3272,7 @@ ${THEMES}
 				});
 			});
 			if (activeVideoRemoved) this.store.setActiveVideo(null);
-			if (removedNodesPresent || this.store.activeVideo && !this.store.activeVideo.isConnected) this.debouncedEvaluate();
+			if (removedNodesPresent || attributeChanged || this.store.activeVideo && !this.store.activeVideo.isConnected) this.debouncedEvaluate();
 			if (this.pendingAddedElements.length > 0 && !this.isWalkScheduled) {
 				this.isWalkScheduled = true;
 				setTimeout(() => {
@@ -3074,13 +3296,16 @@ ${THEMES}
 		}
 		observeShadowRoots(root) {
 			const walk = (node) => {
-				if (node.nodeType !== Node.ELEMENT_NODE) return;
-				const el = node;
-				if (el.shadowRoot) {
-					this.setupShadowRootObserver(el.shadowRoot);
-					walk(el.shadowRoot);
+				if (!node) return;
+				if (node.nodeType === 1) {
+					const el = node;
+					if (el.shadowRoot) {
+						this.setupShadowRootObserver(el.shadowRoot);
+						walk(el.shadowRoot);
+					}
 				}
-				for (let i = 0; i < el.childNodes.length; i++) walk(el.childNodes[i]);
+				const children = node.childNodes;
+				if (children) for (let i = 0; i < children.length; i++) walk(children[i]);
 			};
 			walk(root);
 		}
@@ -3169,7 +3394,9 @@ ${THEMES}
 		"progress",
 		"seeking",
 		"seeked",
-		"loadedmetadata"
+		"loadedmetadata",
+		"loadstart",
+		"emptied"
 	];
 	var VideoTransform = class {
 		eventBus;
@@ -3302,12 +3529,28 @@ ${THEMES}
 				}
 				const rememberedRate = this.store.settings.rememberPlayback ? this.store.settings.lastRate || this.store.settings.defaultSpeed || 1 : this.store.settings.defaultSpeed || 1;
 				const savedRate = this.store.settings.rememberPlayback ? rememberedRate : meta.lastRate !== void 0 ? meta.lastRate : rememberedRate;
-				this.store.updateVideoMetadata(v, { lastRate: savedRate });
+				this.store.updateVideoMetadata(v, {
+					lastRate: savedRate,
+					lastSrc: v.currentSrc || v.src || ""
+				});
 				if (v.playbackRate !== savedRate && this.store.savedPlaybackRate === void 0) this._setRate(savedRate, false);
 				this.applyVideoTransform();
-			} else this.store.timers.hideGrace = setTimeout(() => {
-				if (!this.store.activeVideo && this.ui.wrap) this.ui.wrap.style.display = "none";
-			}, MVC_CONFIG.HIDE_GRACE_PERIOD_MS);
+			} else {
+				if (this.ui.lockShield) this.ui.lockShield.style.display = "none";
+				if (this.ui.brightnessOverlay) this.ui.brightnessOverlay.style.opacity = "0";
+				if (this.store.isScreenLocked) {
+					this.store.isScreenLocked = false;
+					this.ui.wrap?.classList?.remove("locked");
+					if (this.ui.lockBtn) {
+						this.ui.lockBtn.replaceChildren?.(this.ui.getIcon?.("unlock"));
+						this.ui.lockBtn.setAttribute?.("aria-label", "Lock gestures");
+						this.ui.lockBtn.setAttribute?.("aria-pressed", "false");
+					}
+				}
+				this.store.timers.hideGrace = setTimeout(() => {
+					if (!this.store.activeVideo && this.ui.wrap) this.ui.wrap.style.display = "none";
+				}, MVC_CONFIG.HIDE_GRACE_PERIOD_MS);
+			}
 		}
 		attachUIToVideo(video) {
 			if (!this.ui.wrap) return;
@@ -3354,8 +3597,37 @@ ${THEMES}
 						this.emitTimeUpdate(this.store.activeVideo);
 					}
 					this.eventBus.emit("video:play-state-changed", { playing: false });
-					this.eventBus.emit("control:visibility-requested", { visible: true });
 					break;
+				case "loadstart": {
+					const video = this.store.activeVideo;
+					if (video) {
+						const currentSrc = video.currentSrc || video.src || "";
+						const meta = this.store.getVideoMetadata(video);
+						if (meta.lastSrc !== void 0 && meta.lastSrc !== currentSrc) {
+							meta.transform = {
+								ratio: "fit",
+								zoom: 1,
+								rot: 0
+							};
+							this.store.settings.transform = meta.transform;
+							this.applyVideoTransform();
+							this.eventBus.emit("video:transform-need-update", void 0);
+							this.store._rateOverrideCount = 0;
+							const savedTime = this.store.getVideoPosition(video);
+							if (savedTime > 0) {
+								const applyRestore = () => {
+									if (this.store.activeVideo === video && this.store.settings.rememberPlayback) {
+										if (video.currentTime < savedTime) video.currentTime = savedTime;
+									}
+								};
+								if (video.readyState >= 1) applyRestore();
+								else video.addEventListener("loadedmetadata", applyRestore, { once: true });
+							}
+						}
+						meta.lastSrc = currentSrc;
+					}
+					break;
+				}
 				case "loadedmetadata":
 					if (this.store.settings.transform?.rot) this.applyVideoTransform();
 					if (this.store.activeVideo) this.emitTimeUpdate(this.store.activeVideo);
@@ -3427,6 +3699,7 @@ ${THEMES}
 			this.store.isTicking = true;
 			requestAnimationFrame(() => {
 				this.ui.updateBrightnessOverlayPosition();
+				this.ui.updateTopBarPosition?.();
 				this.store.isTicking = false;
 			});
 		}
@@ -3617,6 +3890,13 @@ ${THEMES}
 		}
 		brightness = 1;
 		isScreenLocked = false;
+		get isLocked() {
+			return this.isScreenLocked;
+		}
+		set isLocked(val) {
+			this.isScreenLocked = val;
+		}
+		positions = {};
 		get _rateOverrideCount() {
 			if (!this.activeVideo) return 0;
 			return this.getVideoMetadata(this.activeVideo).rateOverrideCount || 0;
@@ -3695,6 +3975,25 @@ ${THEMES}
 				} catch {}
 			}
 			return domain ? `mvc_lastRate_${domain}` : "mvc_lastRate";
+		}
+		clearDomainSpeed() {
+			const key = this.getDomainSpeedKey();
+			try {
+				if (typeof GM_deleteValue !== "undefined") {
+					GM_deleteValue(key);
+					GM_deleteValue("mvc_lastRate");
+				}
+				localStorage.removeItem(key);
+				localStorage.removeItem("mvc_lastRate");
+			} catch {}
+		}
+		clearAllVideoPositions() {
+			this.positions = {};
+			this.storageSet(this.getStorageKey("positions"), {});
+			try {
+				if (typeof GM_deleteValue !== "undefined") GM_deleteValue(this.getStorageKey("positions"));
+				localStorage.removeItem(this.getStorageKey("positions"));
+			} catch {}
 		}
 		loadSettings() {
 			let savedRate = this.storageGet(this.getDomainSpeedKey(), null);
@@ -3805,9 +4104,28 @@ ${THEMES}
 				"time",
 				"start",
 				"position",
-				"seek"
+				"seek",
+				"v-acctoken",
+				"rnd",
+				"token",
+				"expires",
+				"sig",
+				"signature",
+				"hmac",
+				"auth",
+				"key",
+				"expire",
+				"wsabg",
+				"wsiphost",
+				"_",
+				"hash"
 			];
-			toRemove.forEach((p) => url.searchParams.delete(p));
+			const toDelete = [];
+			url.searchParams.forEach((_, p) => {
+				const lower = p.toLowerCase();
+				if (toRemove.includes(lower) || lower.startsWith("sig") || lower.startsWith("auth") || lower.startsWith("token")) toDelete.push(p);
+			});
+			toDelete.forEach((p) => url.searchParams.delete(p));
 			let hash = url.hash;
 			if (hash) {
 				if (!hash.includes("?") && hash.includes("&") && hash.includes("=")) {
@@ -3819,7 +4137,12 @@ ${THEMES}
 				const query = parts[1];
 				const isRouteQuery = route.includes("=") && !route.includes("/");
 				const params = new URLSearchParams(query || (isRouteQuery ? route.substring(1) : ""));
-				toRemove.forEach((p) => params.delete(p));
+				const hashToDelete = [];
+				params.forEach((_, p) => {
+					const lower = p.toLowerCase();
+					if (toRemove.includes(lower) || lower.startsWith("sig") || lower.startsWith("auth") || lower.startsWith("token")) hashToDelete.push(p);
+				});
+				hashToDelete.forEach((p) => params.delete(p));
 				const newQuery = params.toString();
 				if (query) url.hash = newQuery ? `${route}?${newQuery}` : route;
 				else if (isRouteQuery) url.hash = newQuery ? `#${newQuery}` : "";
@@ -3965,7 +4288,11 @@ ${THEMES}
 			this.ui.stepper?.destroy();
 			this.videoTracker.destroy();
 			this.videoTransform.destroy();
-			clearTimeout(this.store.timers.hideGrace);
+			for (const k of Object.keys(this.store.timers)) {
+				clearTimeout(this.store.timers[k]);
+				clearInterval(this.store.timers[k]);
+				delete this.store.timers[k];
+			}
 		}
 	};
 	//#endregion

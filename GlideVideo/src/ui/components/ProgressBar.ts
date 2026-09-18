@@ -43,13 +43,19 @@ export class ProgressBar extends UIComponent {
 			if (e.key === "ArrowRight") {
 				e.preventDefault();
 				e.stopPropagation();
-				const step = this.ui.store.settings.skipSeconds || 5;
-				this.eventBus.emit("video:skip-requested", { seconds: step });
+				const step = this.ui.store.settings.skipSeconds || MVC_CONFIG.SKIP_DEFAULT;
+				this.eventBus.emit("video:skip-requested", {
+					dir: 1,
+					customSeconds: step,
+				});
 			} else if (e.key === "ArrowLeft") {
 				e.preventDefault();
 				e.stopPropagation();
-				const step = this.ui.store.settings.skipSeconds || 5;
-				this.eventBus.emit("video:skip-requested", { seconds: -step });
+				const step = this.ui.store.settings.skipSeconds || MVC_CONFIG.SKIP_DEFAULT;
+				this.eventBus.emit("video:skip-requested", {
+					dir: -1,
+					customSeconds: step,
+				});
 			} else if (e.key === "Home") {
 				e.preventDefault();
 				e.stopPropagation();

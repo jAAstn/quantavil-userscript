@@ -233,9 +233,14 @@ export class VideoTransform implements EventListenerObject {
 			if (this.ui.brightnessOverlay) {
 				this.ui.brightnessOverlay.style.opacity = "0";
 			}
-			if (this.store.isLocked) {
-				this.store.isLocked = false;
-				this.eventBus.emit("control:lock-changed", { locked: false });
+			if (this.store.isScreenLocked) {
+				this.store.isScreenLocked = false;
+				this.ui.wrap?.classList?.remove("locked");
+				if (this.ui.lockBtn) {
+					this.ui.lockBtn.replaceChildren?.(this.ui.getIcon?.("unlock"));
+					this.ui.lockBtn.setAttribute?.("aria-label", "Lock gestures");
+					this.ui.lockBtn.setAttribute?.("aria-pressed", "false");
+				}
 			}
 			this.store.timers.hideGrace = setTimeout(() => {
 				if (!this.store.activeVideo && this.ui.wrap) {

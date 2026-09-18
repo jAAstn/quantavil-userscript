@@ -135,9 +135,9 @@ describe("ProgressBar Component", () => {
 		store.setActiveVideo(mockVideo);
 
 		progressBar.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
-		expect(skipSpy).toHaveBeenCalledWith({ seconds: 10 });
+		expect(skipSpy).toHaveBeenCalledWith({ dir: 1, customSeconds: 10 });
 
 		progressBar.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }));
-		expect(skipSpy).toHaveBeenCalledWith({ seconds: -10 });
+		expect(skipSpy).toHaveBeenCalledWith({ dir: -1, customSeconds: 10 });
 	});
 });
