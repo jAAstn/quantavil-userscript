@@ -34,13 +34,7 @@ It asks for two permissions and no more: **storage** for your settings, and **ac
 
 ## Themes
 
-Four overlay themes, each answering the same question a different way — *how do controls stay readable over footage you don't control?* All four draw **zero blurred layers**, which is what actually costs frames on mobile: every `backdrop-filter` forces a readback of a video surface that repaints every frame.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/quantavil/userscript/main/GlideVideo/asset/theme-halo.jpg" width="100%" alt="Halo theme with the settings sheet open" />
-</p>
-
-**Halo** · default — nothing over the picture but the controls, each wearing a tight dark outline. It's the trick broadcast subtitles have used for decades, and it never tints the frame.
+Three overlay themes, each answering the same question a different way — *how do controls stay readable over footage you don't control?* All draw **zero blurred layers**, which is what actually costs frames on mobile: every `backdrop-filter` forces a readback of a video surface that repaints every frame.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/quantavil/userscript/main/GlideVideo/asset/theme-high-contrast.jpg" width="49%" alt="High Contrast theme" />
@@ -48,7 +42,13 @@ Four overlay themes, each answering the same question a different way — *how d
   <img src="https://raw.githubusercontent.com/quantavil/userscript/main/GlideVideo/asset/theme-frame.jpg" width="49%" alt="Frame theme" />
 </p>
 
-**High Contrast** — amber on near-opaque black; the only theme fully readable in direct sunlight or on a washed-out panel. &nbsp;·&nbsp; **Frame** — Halo's mechanism with a point of view: hairline corner brackets, a 1px scrub line with frame ticks, one red playhead. The brackets fade with the rest of the controls, so nothing sits on the picture while you watch.
+**High Contrast** · default — amber on near-opaque black; the only theme fully readable in direct sunlight or on a washed-out panel.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/quantavil/userscript/main/GlideVideo/asset/theme-halo.jpg" width="100%" alt="Halo theme with the settings sheet open" />
+</p>
+
+**Halo** — nothing over the picture but the controls, each wearing a tight dark outline. It's the trick broadcast subtitles have used for decades, and it never tints the frame. &nbsp;·&nbsp; **Frame** — Halo's mechanism with a point of view: hairline corner brackets, a 1px scrub line with frame ticks, one red playhead. The brackets fade with the rest of the controls, so nothing sits on the picture while you watch.
 
 ---
 
@@ -74,7 +74,7 @@ In portrait, vertical swipes are handed back to the page so feeds still scroll. 
 | | |
 |---|---|
 | **Speed** | `−` / `+` steps by 0.10×, hold to fine-tune by 0.05×. Tap the number to play/pause, long-press to reset to 1.00× |
-| **Scrubber** | Drag to seek. Shows buffered range and a timestamp preview |
+| **Scrubber** | Optional seek bar (off by default, enable in Settings). Drag to seek or navigate with keyboard (`ArrowLeft`/`Right`, `Home`/`End`). Shows buffered range and a timestamp preview |
 | **Aspect ratio** | Tap cycles Fit → Fill → Stretch. **Hold to rotate** 90° at a time — turns a portrait clip to fill a landscape screen, scaled to fit rather than just tipped on its side |
 | **Lock** | Blocks every gesture, so a stray palm does nothing |
 | **Picture-in-Picture** | Where the browser supports it |
@@ -88,13 +88,13 @@ Prefer something smaller? **Minimal Speed FAB** swaps the speed pill for a singl
 
 | | |
 |---|---|
-| **Theme** | Halo, High Contrast, or Frame |
+| **Theme** | High Contrast (default), Halo, or Frame |
 | **Rotate** | 0° / 90° / 180° / 270°, also on a long-press of the aspect-ratio button |
 | **Default speed** | Fallback speed for new videos |
 | **Skip duration** | Seconds per double-tap skip, 5–300 |
 | **Speed FAB** | Compact speed badge instead of the pill |
 | **Left hand** | Mirrors controls and swaps volume/brightness rails for left thumb use |
-| **Progress bar** | Show or hide the scrubber |
+| **Progress bar** | Show or hide the scrubber (disabled by default) |
 | **Gestures** | Master switch |
 | **Remember** | Restores position and speed when you come back |
 | **Page scroll** | Keeps vertical page scrolling in portrait |
@@ -105,6 +105,13 @@ Toggles sit two to a line, so the whole sheet fits without scrolling on a phone.
 Speed and theme are remembered per domain. Playback position is remembered per video, for the last 100. Zoom and rotation are per-video and reset on the next one, so a stray 90° never follows you around.
 
 If a site keeps overriding your speed, GlideVideo pushes back three times, then says so in a toast and lets the site win rather than fighting in a loop.
+
+### Accessibility & Keyboard Navigation
+
+Every overlay control is fully navigable without touch:
+- **Buttons & Toggles**: Tab through controls; toggle switches with `Space` or `Enter` (`role="switch"`, `aria-checked`).
+- **Scrubber Bar**: Seek with `ArrowLeft` / `ArrowRight` (5s), `Home` (start), `End` (finish) with accessible `role="slider"`.
+- **Vector UI & Motion**: Crisp inline SVG icons throughout (no font emoji dependencies) and full `prefers-reduced-motion` compliance.
 
 ---
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GlideVideo: Better Video Controls with Gesture for Mobile Web
 // @namespace    https://github.com/quantavil/userscript/GlideVideo
-// @version      8.5.0
+// @version      8.6.0
 // @author       quantavil (https://github.com/quantavil)
 // @description  Makes mobile web video actually usable — control playback, volume, and zoom without fumbling for tiny buttons, all through natural touch gestures. Works on any browser that support extension like Edge, Firefox, Cromite etc.
 // @license      MIT
@@ -614,10 +614,9 @@
 		}
 	};
 	var THEMES = `
-        /* ── HALO (default) ────────────────────────────────────────────
+        /* ── HALO ──────────────────────────────────────────────────────
            No surfaces at all. Each glyph carries its own dark outline —
            the subtitle solution. Nothing is drawn over the picture. */
-        :root,
         :root[data-mvc-theme="halo"] {
             --mvc-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
             --mvc-surface: transparent;
@@ -649,9 +648,10 @@
             --mvc-track-h: 3px;
         }
 
-        /* ── HIGH CONTRAST ─────────────────────────────────────────────
+        /* ── HIGH CONTRAST (default) ───────────────────────────────────
            Near-opaque solids, amber, squared. Readable in sunlight and on
            washed-out panels. Zero blur, zero shadow. */
+        :root,
         :root[data-mvc-theme="contrast"] {
             --mvc-font: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
             --mvc-surface: rgba(8, 9, 10, 0.92);
@@ -1674,13 +1674,13 @@ ${THEMES}
 		document.head.appendChild(style);
 	}
 	var MVC_THEMES = [
-		"halo",
 		"contrast",
+		"halo",
 		"frame"
 	];
 	var MVC_THEME_LABELS = {
-		halo: "Halo",
 		contrast: "High Contrast",
+		halo: "Halo",
 		frame: "Frame"
 	};
 	function applyTheme(theme) {
@@ -1715,6 +1715,7 @@ ${THEMES}
 			this.element = this.render();
 			this.setupSubscriptions();
 			this.setupPointerListeners();
+			this.updateDisplay();
 		}
 		render() {
 			const wrap = document.createElement("div");
@@ -2034,7 +2035,7 @@ ${THEMES}
 		{
 			label: "Progress bar",
 			key: "progressBarEnabled",
-			def: true
+			def: false
 		},
 		{
 			label: "Gestures",
@@ -2087,7 +2088,7 @@ ${THEMES}
 			const card = document.createElement("div");
 			card.className = "mvc-settings-card";
 			sheet.appendChild(card);
-			this.addStepper(card, "Theme", (i) => MVC_THEME_LABELS[MVC_THEMES[i]] ?? "Halo", () => Math.max(0, MVC_THEMES.indexOf(this.store.settings.theme)), (dir) => {
+			this.addStepper(card, "Theme", (i) => MVC_THEME_LABELS[MVC_THEMES[i]] ?? "High Contrast", () => Math.max(0, MVC_THEMES.indexOf(this.store.settings.theme)), (dir) => {
 				const n = MVC_THEMES.length;
 				const cur = Math.max(0, MVC_THEMES.indexOf(this.store.settings.theme));
 				this.store.saveSetting("theme", MVC_THEMES[(cur + dir + n) % n]);
@@ -2133,7 +2134,7 @@ ${THEMES}
 					zoom: 1,
 					rot: 0
 				});
-				this.store.saveSetting("theme", "halo");
+				this.store.saveSetting("theme", "contrast");
 				this.store.saveSetting("defaultSpeed", MVC_CONFIG.SPEED_DEFAULT);
 				this.store.saveSetting("skipSeconds", MVC_CONFIG.SKIP_DEFAULT);
 				this.store.saveSetting("lastRate", MVC_CONFIG.SPEED_DEFAULT);
@@ -3886,8 +3887,8 @@ ${THEMES}
 		loadSettings() {
 			let savedRate = this.storageGet(this.getDomainSpeedKey(), null);
 			if (savedRate === null) savedRate = this.storageGet(this.getStorageKey("lastRate"), MVC_CONFIG.SPEED_DEFAULT);
-			const rawTheme = this.storageGet(this.getStorageKey("theme"), "halo");
-			const theme = MVC_THEMES.includes(rawTheme) ? rawTheme : "halo";
+			const rawTheme = this.storageGet(this.getStorageKey("theme"), "contrast");
+			const theme = MVC_THEMES.includes(rawTheme) ? rawTheme : "contrast";
 			this.settings = {
 				skipSeconds: this.storageGet(this.getStorageKey("skipSeconds"), MVC_CONFIG.SKIP_DEFAULT),
 				defaultSpeed: this.storageGet(this.getStorageKey("defaultSpeed"), MVC_CONFIG.SPEED_DEFAULT),
@@ -3901,7 +3902,7 @@ ${THEMES}
 				gesturesEnabled: this.storageGet(this.getStorageKey("gesturesEnabled"), true),
 				scrollCompatibility: this.storageGet(this.getStorageKey("scrollCompatibility"), true),
 				rememberPlayback: this.storageGet(this.getStorageKey("rememberPlayback"), true),
-				progressBarEnabled: this.storageGet(this.getStorageKey("progressBarEnabled"), true),
+				progressBarEnabled: this.storageGet(this.getStorageKey("progressBarEnabled"), false),
 				minimalSpeedFab: this.storageGet(this.getStorageKey("minimalSpeedFab"), false),
 				leftHandMode: this.storageGet(this.getStorageKey("leftHandMode"), false)
 			};
