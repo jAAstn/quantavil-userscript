@@ -1,0 +1,444 @@
+/**
+ * Playback & Audio Focus Controller
+ * Guarantees that only ONE video/embed plays at any moment with ZERO audio overlap.
+ * Audio is UNMUTED by default.
+ */
+
+declare function GM_getValue<T>(key: string, defaultValue?: T): T;
+declare function GM_setValue<T>(key: string, value: T): void;
+
+const STORAGE_KEY = 'reddit_reels_muted';
+
+/**
+ * Audio is UNMUTED by default per user requirement.
+ */
+function getInitialMuteState(): boolean {
+  try {
+    if (typeof GM_getValue === 'function') {
+      const gmVal = GM_getValue<boolean | null>(STORAGE_KEY, null);
+      if (gmVal !== null && typeof gmVal === 'boolean') {
+        return gmVal;
+      }
+    }
+  } catch {}
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const localVal = localStorage.getItem(STORAGE_KEY);
+      if (localVal !== null) {
+        return localVal === 'true';
+      }
+    }
+  } catch {}
+
+  // UNMUTED by default
+  return false;
+}
+
+function persistMuteState(muted: boolean): void {
+  try {
+    if (typeof GM_setValue === 'function') {
+      GM_setValue(STORAGE_KEY, muted);
+    }
+  } catch {}
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, String(muted));
+    }
+  } catch {}
+}
+
+/**
+ * Unlocks browser audio playback permission on trusted user gestures (e.g. FAB click or first tap).
+ * Reuses a single shared AudioContext so repeated taps do not leak contexts.
+ */
+let sharedAudioCtx: AudioContext | null = null;
+
+export function unlockAudio(): void {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+      sharedAudioCtx = new AudioCtx();
+    }
+    const ctx = sharedAudioCtx;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    // One-shot silent buffer to unlock; context itself is reused.
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch {
+    // Ignore if Web Audio API is restricted
+  }
+}
+
+/**
+ * Recursively traverses DOM and all open shadow roots to discover all media elements.
+ */
+export function deepFindMediaElements(root: Node): {
+  videos: HTMLVideoElement[];
+  audios: HTMLAudioElement[];
+  players: HTMLElement[];
+} {
+  const videos: HTMLVideoElement[] = [];
+  const audios: HTMLAudioElement[] = [];
+  const players: HTMLElement[] = [];
+
+  function traverse(node: Node) {
+    if (!node) return;
+
+    if (
+      (typeof HTMLVideoElement !== 'undefined' && node instanceof HTMLVideoElement) ||
+      (node as any).tagName?.toLowerCase() === 'video'
+    ) {
+      videos.push(node as HTMLVideoElement);
+    } else if (
+      (typeof HTMLAudioElement !== 'undefined' && node instanceof HTMLAudioElement) ||
+      (node as any).tagName?.toLowerCase() === 'audio'
+    ) {
+      audios.push(node as HTMLAudioElement);
+    } else if (node instanceof HTMLElement) {
+      const tag = node.tagName.toLowerCase();
+      if (
+        tag.includes('player') ||
+        tag.includes('vds-media') ||
+        tag.includes('vds-video') ||
+        tag.includes('vds-audio')
+      ) {
+        players.push(node);
+      }
+
+      if (node.shadowRoot) {
+        traverse(node.shadowRoot);
+      }
+    }
+
+    if (node.childNodes && node.childNodes.length > 0) {
+      for (let i = 0; i < node.childNodes.length; i++) {
+        traverse(node.childNodes[i]);
+      }
+    }
+  }
+
+  traverse(root);
+  return { videos, audios, players };
+}
+
+/**
+ * Forcefully applies muted or unmuted state across all media elements, shadow roots,
+ * custom player elements, and iframes in a container.
+ */
+export function applyAudioState(container: HTMLElement, isMuted: boolean): void {
+  if (!container) return;
+
+  const { videos, audios, players } = deepFindMediaElements(container);
+
+  // 1. Unmute/mute all video elements
+  for (const video of videos) {
+    try {
+      video.muted = isMuted;
+      video.volume = 1.0;
+      if (!isMuted && video.paused) {
+        video.play().catch(() => {});
+      }
+    } catch {}
+  }
+
+  // 2. Unmute/mute all audio elements (e.g. separate DASH audio tracks)
+  for (const audio of audios) {
+    try {
+      audio.muted = isMuted;
+      audio.volume = 1.0;
+      if (!isMuted && audio.paused) {
+        audio.play().catch(() => {});
+      }
+    } catch {}
+  }
+
+  // 3. Update player custom elements & attributes
+  for (const player of players) {
+    try {
+      if (isMuted) {
+        player.setAttribute('muted', '');
+        (player as any).muted = true;
+      } else {
+        player.removeAttribute('muted');
+        (player as any).muted = false;
+        (player as any).volume = 1.0;
+      }
+    } catch {}
+  }
+
+  // 4. Update iframes (e.g. RedGifs embed)
+  const iframes = container.querySelectorAll<HTMLIFrameElement>('iframe');
+  for (const ifr of iframes) {
+    try {
+      ifr.contentWindow?.postMessage(
+        {
+          action: isMuted ? 'mute' : 'unmute',
+          type: isMuted ? 'mute' : 'unmute',
+          muted: isMuted,
+          volume: isMuted ? 0 : 1,
+        },
+        '*'
+      );
+
+      if (!isMuted && ifr.src && ifr.src.includes('muted=1')) {
+        ifr.src = ifr.src.replace(/muted=1/g, 'muted=0');
+      }
+    } catch {}
+  }
+}
+
+export class AudioManager {
+  private _isMuted: boolean;
+  private activeContainer: HTMLElement | null = null;
+  private activeVideo: HTMLVideoElement | null = null;
+  private videoCache = new WeakMap<HTMLElement, { video: HTMLVideoElement | null; time: number }>();
+
+  constructor(initialMuted?: boolean) {
+    this._isMuted = initialMuted !== undefined ? initialMuted : getInitialMuteState();
+  }
+
+  public get isMuted(): boolean {
+    return this._isMuted;
+  }
+
+  public set isMuted(value: boolean) {
+    this._isMuted = value;
+    persistMuteState(this._isMuted);
+    this.syncActiveMute();
+  }
+
+  public getActiveVideo(): HTMLVideoElement | null {
+    return this.activeVideo;
+  }
+
+  public getActiveContainer(): HTMLElement | null {
+    return this.activeContainer;
+  }
+
+  /**
+   * Request playback for a specific video or slide container.
+   * Immediately halts and mutes all other media on the page to prevent audio overlap.
+   */
+  public requestPlayback(target: HTMLVideoElement | HTMLElement): void {
+    if (!target) return;
+
+    let targetVideo: HTMLVideoElement | null = null;
+    let targetContainer: HTMLElement | null = null;
+
+    const isVideo =
+      (typeof HTMLVideoElement !== 'undefined' && target instanceof HTMLVideoElement) ||
+      (target as any).tagName?.toLowerCase() === 'video' ||
+      typeof (target as any).play === 'function';
+
+    if (isVideo) {
+      targetVideo = target as HTMLVideoElement;
+      targetContainer = typeof target.closest === 'function'
+        ? (target.closest('shreddit-post, [data-post-id], article') as HTMLElement)
+        : null;
+    } else {
+      targetContainer = target as HTMLElement;
+      targetVideo = this.findVideo(target as HTMLElement);
+    }
+
+    // 1. Forcefully pause, mute, and reset the previously active video
+    if (this.activeVideo && this.activeVideo !== targetVideo) {
+      try {
+        this.activeVideo.pause();
+        this.activeVideo.muted = true;
+        this.activeVideo.currentTime = 0;
+      } catch {}
+    }
+
+    if (this.activeContainer && this.activeContainer !== targetContainer) {
+      applyAudioState(this.activeContainer, true);
+    }
+
+    this.activeContainer = targetContainer;
+    this.activeVideo = targetVideo;
+
+    // 2. Forcefully pause, mute, and reset ALL other videos/audios in the document
+    if (typeof document !== 'undefined') {
+      const allVideos = document.querySelectorAll<HTMLVideoElement>('video');
+      allVideos.forEach((v) => {
+        if (v !== targetVideo) {
+          try {
+            if (!v.paused) v.pause();
+            v.muted = true;
+            v.currentTime = 0;
+          } catch {}
+        }
+      });
+
+      const allAudios = document.querySelectorAll<HTMLAudioElement>('audio');
+      allAudios.forEach((a) => {
+        try {
+          if (!a.paused) a.pause();
+          a.muted = true;
+          a.currentTime = 0;
+        } catch {}
+      });
+
+      // Blank out inactive iframes so cross-origin audio immediately dies.
+      // Trade-off (intentional per zero-bleed contract): providers ignore generic
+      // postMessage mute, so returning to an iframe rebuffers instead of resuming.
+      // Active iframe src is restored below via dataset.rrSrc.
+      const allIframes = document.querySelectorAll<HTMLIFrameElement>('iframe');
+      allIframes.forEach((ifr) => {
+        if (!targetContainer || !targetContainer.contains(ifr)) {
+          if (ifr.src && ifr.src !== 'about:blank') {
+            ifr.dataset.rrSrc = ifr.src;
+            ifr.src = 'about:blank';
+          }
+        }
+      });
+    }
+
+    // 3. Play active video and apply audio state
+    if (targetContainer) {
+      applyAudioState(targetContainer, this._isMuted);
+
+      // Restore active iframe if blanked
+      const iframes = targetContainer.querySelectorAll<HTMLIFrameElement>('iframe');
+      iframes.forEach((ifr) => {
+        if (ifr.dataset.rrSrc && ifr.src === 'about:blank') {
+          ifr.src = ifr.dataset.rrSrc;
+        }
+      });
+    }
+
+    if (targetVideo) {
+      targetVideo.muted = this._isMuted;
+      targetVideo.playsInline = true;
+      targetVideo.play().catch((err: Error) => {
+        // If unmuted autoplay blocked by browser policy without gesture, fallback to muted
+        if (!targetVideo.muted && (err.name === 'NotAllowedError' || err.name === 'AbortError')) {
+          targetVideo.muted = true;
+          targetVideo.play().catch(() => {});
+        }
+      });
+    }
+  }
+
+  /**
+   * Helper to locate video in container, traversing all nested shadowRoots.
+   * Fast-paths the active container and memoizes recent lookups (~1s TTL) so
+   * IntersectionObserver threshold storms do not re-walk shadow DOM every time.
+   */
+  public findVideo(container: HTMLElement): HTMLVideoElement | null {
+    if (!container) return null;
+
+    if (
+      container === this.activeContainer &&
+      this.activeVideo &&
+      container.contains(this.activeVideo)
+    ) {
+      return this.activeVideo;
+    }
+
+    const cached = this.videoCache.get(container);
+    if (cached && Date.now() - cached.time < 1000 && (cached.video === null || container.contains(cached.video))) {
+      return cached.video;
+    }
+
+    const { videos } = deepFindMediaElements(container);
+    const found = videos.length > 0 ? videos[0] : null;
+    try {
+      this.videoCache.set(container, { video: found, time: Date.now() });
+    } catch {}
+    return found;
+  }
+
+  public invalidateVideoCache(container?: HTMLElement | null): void {
+    try {
+      if (container) {
+        this.videoCache.delete(container);
+      }
+    } catch {}
+  }
+
+  /**
+   * Toggle mute on/off, apply to active media or specified container, and persist state
+   */
+  public toggleMute(container?: HTMLElement): boolean {
+    this._isMuted = !this._isMuted;
+    persistMuteState(this._isMuted);
+
+    const target = container || this.activeContainer;
+    if (target) {
+      applyAudioState(target, this._isMuted);
+    }
+    this.syncActiveMute();
+
+    return this._isMuted;
+  }
+
+  private syncActiveMute(): void {
+    if (this.activeContainer) {
+      applyAudioState(this.activeContainer, this._isMuted);
+    } else if (this.activeVideo) {
+      try {
+        this.activeVideo.muted = this._isMuted;
+        if (!this._isMuted && this.activeVideo.paused) {
+          this.activeVideo.play().catch(() => {});
+        }
+      } catch {}
+    }
+  }
+
+  /**
+   * Immediately halt and mute all playback across the document
+   */
+  public stopAll(): void {
+    if (this.activeContainer) {
+      applyAudioState(this.activeContainer, true);
+    }
+
+    if (this.activeVideo) {
+      try {
+        this.activeVideo.pause();
+        this.activeVideo.muted = true;
+        this.activeVideo.currentTime = 0;
+      } catch {}
+    }
+
+    this.activeVideo = null;
+    this.activeContainer = null;
+
+    if (typeof document !== 'undefined') {
+      const allVideos = document.querySelectorAll<HTMLVideoElement>('video');
+      allVideos.forEach((v) => {
+        try {
+          if (!v.paused) v.pause();
+          v.muted = true;
+          v.currentTime = 0;
+        } catch {}
+      });
+
+      const allAudios = document.querySelectorAll<HTMLAudioElement>('audio');
+      allAudios.forEach((a) => {
+        try {
+          if (!a.paused) a.pause();
+          a.muted = true;
+          a.currentTime = 0;
+        } catch {}
+      });
+
+      const allIframes = document.querySelectorAll<HTMLIFrameElement>('iframe');
+      allIframes.forEach((ifr) => {
+        try {
+          ifr.contentWindow?.postMessage({ action: 'pause', muted: true }, '*');
+        } catch {}
+      });
+    }
+  }
+}
+
+export const audioManager = new AudioManager();

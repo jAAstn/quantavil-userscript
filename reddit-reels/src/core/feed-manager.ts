@@ -1,0 +1,458 @@
+/**
+ * Feed Manager Subsystem
+ * Orchestrates post querying, DOM enhancement, infinite scroll mutations,
+ * IntersectionObserver playback mutex, and Videos-Only filtering.
+ */
+
+import { ReelPost, parsePostElement } from '../extractor';
+import { audioManager, applyAudioState, resolveMedia } from '../media';
+import { renderLinkCard, renderTextCard } from '../cards';
+import { renderReelOverlay, syncOverlaySubtitlesButtons } from '../ui/overlay';
+import { unconstrainPostMedia, restorePostMedia, applySubtitlesState } from './unconstrainer';
+
+declare function GM_getValue<T>(key: string, defaultValue?: T): T;
+declare function GM_setValue(key: string, value: unknown): void;
+
+const VIDEOS_ONLY_KEY = '@reddit-reels/videos-only';
+const SUBTITLES_KEY = '@reddit-reels/subtitles';
+
+function readPref(key: string): boolean {
+  try {
+    if (typeof GM_getValue === 'function') {
+      const gmVal = GM_getValue<string | null>(key, null);
+      if (gmVal !== null) return gmVal === '1';
+    }
+  } catch {}
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writePref(key: string, value: boolean): void {
+  try {
+    if (typeof GM_setValue === 'function') {
+      GM_setValue(key, value ? '1' : '0');
+    }
+  } catch {}
+  try {
+    localStorage.setItem(key, value ? '1' : '0');
+  } catch {}
+}
+
+/**
+ * Single source of truth for "does this post have playable video".
+ * Uses the fully-resolved postType (which reclassifies RedGifs/Streamable/
+ * Gfycat links as video) plus live DOM checks for native video/iframe.
+ */
+export function hasVideoContent(postEl: HTMLElement, postType?: string): boolean {
+  const resolvedType = postType ?? postEl.dataset?.rrPostType;
+  if (resolvedType === 'video') return true;
+  if (resolvedType === undefined) {
+    // Cheap checks first to avoid a full parse + shadow-DOM walk per post.
+    if (postEl.getAttribute('post-type') === 'video') return true;
+    const domain = postEl.getAttribute('domain') || '';
+    const contentHref = postEl.getAttribute('content-href') || '';
+    if (/(redgifs\.com|streamable\.com|gfycat\.com)/i.test(domain + ' ' + contentHref)) return true;
+    if (postEl.querySelector('iframe')) return true;
+    try {
+      const parsed = parsePostElement(postEl);
+      if (parsed.postType === 'video') return true;
+    } catch {}
+  }
+  return !!audioManager.findVideo(postEl) || !!postEl.querySelector('iframe');
+}
+
+export function getPostElements(): HTMLElement[] {
+  const shredditPosts = Array.from(document.querySelectorAll<HTMLElement>('shreddit-post'));
+  if (shredditPosts.length > 0) {
+    return shredditPosts;
+  }
+  const rawPosts = Array.from(
+    document.querySelectorAll<HTMLElement>('article, [data-testid="post-container"], .Post')
+  );
+  return rawPosts.filter((el) => {
+    return !rawPosts.some((other) => other !== el && other.contains(el));
+  });
+}
+
+export function getClosestPostToViewport(): HTMLElement | null {
+  const posts = getPostElements().filter((p) => !p.classList.contains('rr-filtered-out'));
+  if (posts.length === 0) return null;
+
+  const viewportCenter = window.innerHeight / 2;
+  let closest: HTMLElement | null = null;
+  let minDistance = Infinity;
+
+  for (const post of posts) {
+    const rect = post.getBoundingClientRect();
+    const postCenter = rect.top + rect.height / 2;
+    const distance = Math.abs(postCenter - viewportCenter);
+    if (distance < minDistance) {
+      minDistance = distance;
+      closest = post;
+    }
+  }
+
+  return closest || posts[0];
+}
+
+export interface FeedManagerOptions {
+  isReelModeActive: () => boolean;
+}
+
+export class FeedManager {
+  private options: FeedManagerOptions;
+  private feedObserver: IntersectionObserver | null = null;
+  private mutationObserver: MutationObserver | null = null;
+  private mutationDebounce: ReturnType<typeof setTimeout> | null = null;
+  private videosOnlyMode = false;
+  private subtitlesEnabled = false;
+
+  constructor(options: FeedManagerOptions) {
+    this.options = options;
+    this.videosOnlyMode = readPref(VIDEOS_ONLY_KEY);
+    this.subtitlesEnabled = readPref(SUBTITLES_KEY);
+  }
+
+  public get isVideosOnly(): boolean {
+    return this.videosOnlyMode;
+  }
+
+  public get isSubtitles(): boolean {
+    return this.subtitlesEnabled;
+  }
+
+  public setVideosOnly(value: boolean): void {
+    this.videosOnlyMode = value;
+    writePref(VIDEOS_ONLY_KEY, value);
+    this.applyVideosOnlyFilter();
+  }
+
+  public toggleVideosOnly(): boolean {
+    this.setVideosOnly(!this.videosOnlyMode);
+    return this.videosOnlyMode;
+  }
+
+  public toggleSubtitles(): boolean {
+    this.subtitlesEnabled = !this.subtitlesEnabled;
+    writePref(SUBTITLES_KEY, this.subtitlesEnabled);
+    document.documentElement.classList.toggle('rr-hide-captions', !this.subtitlesEnabled);
+    const posts = getPostElements();
+    posts.forEach((p) => applySubtitlesState(p, this.subtitlesEnabled));
+    syncOverlaySubtitlesButtons(this.subtitlesEnabled);
+    return this.subtitlesEnabled;
+  }
+
+  public enhancePost(postEl: HTMLElement): void {
+    if (postEl.querySelector('.rr-post-overlay')) return;
+
+    const post: ReelPost = parsePostElement(postEl);
+    const hasVideo = hasVideoContent(postEl, post.postType);
+    const isLinkPost = post.postType === 'link';
+    const isTextPost = post.postType === 'text';
+
+    // 1. Scoped cleanup of custom shadowRoot to prevent Reddit's native action bar and clutter from leaking
+    if (postEl.shadowRoot) {
+      if (!postEl.shadowRoot.querySelector('#rr-shadow-cleanup-style')) {
+        const shadowStyle = document.createElement('style');
+        shadowStyle.id = 'rr-shadow-cleanup-style';
+        shadowStyle.textContent = `
+          rpl-action-bar,
+          shreddit-action-bar,
+          shreddit-post-action-row,
+          feed-post-action-row,
+          [data-testid="action-row"],
+          [data-testid="post-vote-control"],
+          shreddit-post-vote-control,
+          shreddit-vote-animations,
+          slot[name="share-button"],
+          slot[name="credit-bar"],
+          slot[name="action-row"],
+          slot[name="vote"],
+          slot[name="vote-button"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+        `;
+        postEl.shadowRoot.appendChild(shadowStyle);
+      }
+    }
+
+    // 2. Handle post type rendering
+    if (isLinkPost) {
+      postEl.classList.add('rr-is-link');
+      renderLinkCard(postEl, post);
+    } else if (isTextPost) {
+      postEl.classList.add('rr-is-text');
+      renderTextCard(postEl, post);
+    } else {
+      // Video, Image, or Gallery
+      // If it's a video post without native video or iframe (e.g. RedGifs / Streamable), embed iframe
+      if (post.postType === 'video' && !postEl.querySelector('video, iframe')) {
+        const media = resolveMedia(post);
+        if (media.type === 'iframe' && media.src) {
+          const container =
+            postEl.querySelector<HTMLElement>('[slot="post-media-container"]') ||
+            postEl.querySelector<HTMLElement>('.media-container') ||
+            postEl;
+          const iframe = document.createElement('iframe');
+          // Honor the global mute state from the start so a RedGifs embed
+          // boots unmuted by default (audio on) and muted when global is muted.
+          let src = media.src;
+          try {
+            if (audioManager.isMuted && /muted=0/.test(src)) {
+              src = src.replace(/muted=0/g, 'muted=1');
+            } else if (!audioManager.isMuted && /muted=1/.test(src)) {
+              src = src.replace(/muted=1/g, 'muted=0');
+            }
+          } catch {}
+          iframe.src = src;
+          iframe.className = 'rr-embedded-iframe';
+          iframe.setAttribute('loading', 'eager');
+          iframe.setAttribute('frameborder', '0');
+          iframe.setAttribute('allowfullscreen', 'true');
+          iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+          container.appendChild(iframe);
+          audioManager.invalidateVideoCache(postEl);
+        }
+      }
+
+      unconstrainPostMedia(postEl);
+      applySubtitlesState(postEl, this.subtitlesEnabled);
+    }
+
+    // 3. Filter out if videos-only mode is active
+    if (this.videosOnlyMode && !hasVideo) {
+      postEl.classList.add('rr-filtered-out');
+    } else {
+      postEl.classList.remove('rr-filtered-out');
+    }
+    postEl.style.removeProperty('display');
+
+    // 4. Suppress native elements via scoped class (no inline style pollution)
+    Array.from(postEl.children).forEach((child) => {
+      const el = child as HTMLElement;
+      if (
+        el.classList?.contains('rr-post-overlay') ||
+        el.classList?.contains('rr-link-card-container') ||
+        el.classList?.contains('rr-text-card-container')
+      ) {
+        return;
+      }
+      const isActionOrMeta = el.matches?.(
+        '[slot="credit-bar"], [slot="post-credit-bar"], [slot="title-and-metadata"], [slot="title"], [slot="action-row"], [slot="text-body"], [slot="vote"], [slot="vote-button"], shreddit-post-action-row, feed-post-action-row, shreddit-action-bar, rpl-action-bar, shreddit-post-credit-bar, faceplate-tracker, shreddit-interaction-container'
+      );
+      if (isActionOrMeta) {
+        el.classList.add('rr-native-suppressed');
+        return;
+      }
+      if (
+        !isLinkPost &&
+        !isTextPost &&
+        (el.matches?.(
+          '[slot="post-media-container"], shreddit-player-2, .media-container, gallery-carousel, faceplate-carousel, shreddit-aspect-ratio, shreddit-async-loader'
+        ) ||
+          el.querySelector('video, img:not(.shreddit-subreddit-icon__icon), iframe, gallery-carousel, faceplate-carousel, shreddit-player-2') !== null)
+      ) {
+        return;
+      }
+      el.classList.add('rr-native-suppressed');
+    });
+
+    postEl.querySelectorAll<HTMLElement>(
+      '[slot="credit-bar"], [slot="post-credit-bar"], [slot="title-and-metadata"], [slot="title"], [slot="action-row"], [slot="text-body"], [slot="vote"], [slot="vote-button"], shreddit-post-action-row, feed-post-action-row, shreddit-action-bar, rpl-action-bar, shreddit-post-credit-bar, faceplate-tracker, shreddit-interaction-container'
+    ).forEach((el) => {
+      el.classList.add('rr-native-suppressed');
+    });
+
+    // 5. Render overlay rail and metadata
+    renderReelOverlay(postEl, post, {
+      hasVideo,
+      isSubtitlesEnabled: () => this.subtitlesEnabled,
+      onToggleSubtitles: () => this.toggleSubtitles(),
+    });
+  }
+
+  /**
+   * Reverses enhancements on a single post element, completely restoring native Reddit state
+   */
+  public restorePost(postEl: HTMLElement): void {
+    // 1. Remove injected overlays and card containers
+    postEl.querySelectorAll<HTMLElement>(
+      '.rr-post-overlay, .rr-text-card-container, .rr-link-card-container'
+    ).forEach((el) => el.remove());
+
+    // 2. Remove injected iframe embeds
+    postEl.querySelectorAll<HTMLIFrameElement>('iframe.rr-embedded-iframe').forEach((ifr) => {
+      ifr.remove();
+    });
+
+    // 3. Remove shadowRoot cleanup styles and clear inline styles
+    if (postEl.shadowRoot) {
+      const cleanupStyle = postEl.shadowRoot.querySelector('#rr-shadow-cleanup-style');
+      cleanupStyle?.remove();
+      const shadowActionBars = postEl.shadowRoot.querySelectorAll<HTMLElement>(
+        'rpl-action-bar, [data-testid="action-row"], .shreddit-post-container, slot[name="action-row"], slot[name="share-button"], slot[name="credit-bar"]'
+      );
+      shadowActionBars.forEach((el) => {
+        el.style.removeProperty('display');
+      });
+    }
+
+    // 4. Remove suppressed class and any lingering inline display styles on native children
+    postEl.querySelectorAll<HTMLElement>('.rr-native-suppressed').forEach((el) => {
+      el.classList.remove('rr-native-suppressed');
+      el.style.removeProperty('display');
+    });
+    Array.from(postEl.children).forEach((child) => {
+      const el = child as HTMLElement;
+      el.classList?.remove('rr-native-suppressed');
+      el.style?.removeProperty('display');
+    });
+
+    // 5. Restore media unconstraining & aspect ratio
+    restorePostMedia(postEl);
+
+    // 6. Remove post-level classes and inline display
+    postEl.classList.remove('rr-filtered-out', 'rr-is-link', 'rr-is-text');
+    postEl.style.removeProperty('display');
+  }
+
+  public teardownAllPosts(): void {
+    const posts = getPostElements();
+    posts.forEach((p) => this.restorePost(p));
+  }
+
+  public enhanceAllPosts(): void {
+    const posts = getPostElements();
+    posts.forEach((p) => this.enhancePost(p));
+  }
+
+  public applyVideosOnlyFilter(): void {
+    const posts = getPostElements();
+    for (const postEl of posts) {
+      const hasVideo = hasVideoContent(postEl, postEl.dataset?.rrPostType);
+      if (this.videosOnlyMode && !hasVideo) {
+        postEl.classList.add('rr-filtered-out');
+      } else {
+        postEl.classList.remove('rr-filtered-out');
+      }
+      postEl.style.removeProperty('display');
+    }
+  }
+
+  public startObservers(): void {
+    this.stopObservers();
+    document.documentElement.classList.toggle('rr-hide-captions', !this.subtitlesEnabled);
+
+    this.feedObserver = new IntersectionObserver(
+      (entries) => {
+        if (!this.options.isReelModeActive()) return;
+
+        for (const entry of entries) {
+          const post = entry.target as HTMLElement;
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            // Active post: Ensure unconstrained full-bleed scaling & play audio
+            unconstrainPostMedia(post);
+            applySubtitlesState(post, this.subtitlesEnabled);
+            audioManager.requestPlayback(post);
+          } else if (!entry.isIntersecting || entry.intersectionRatio < 0.2) {
+            // Inactive post: Immediately pause, mute, and reset
+            applyAudioState(post, true);
+            const video = audioManager.findVideo(post);
+            if (video) {
+              try {
+                if (!video.paused) video.pause();
+                video.muted = true;
+                video.currentTime = 0;
+              } catch {}
+            }
+          }
+        }
+      },
+      {
+        threshold: [0.2, 0.5, 0.8],
+      }
+    );
+
+    const posts = getPostElements();
+    posts.forEach((p) => this.feedObserver?.observe(p));
+
+    this.mutationObserver = new MutationObserver((mutations) => {
+      if (!this.options.isReelModeActive()) return;
+
+      let hasRelevantChanges = false;
+      for (const mutation of mutations) {
+        if (mutation.type !== 'childList' || mutation.addedNodes.length === 0) continue;
+        for (let i = 0; i < mutation.addedNodes.length; i++) {
+          const node = mutation.addedNodes[i];
+          if (node.nodeType !== Node.ELEMENT_NODE) continue;
+          const el = node as HTMLElement;
+          if (
+            el.matches?.('shreddit-post, article, [data-testid="post-container"], .Post') ||
+            el.querySelector?.('shreddit-post, article, [data-testid="post-container"], .Post')
+          ) {
+            hasRelevantChanges = true;
+            break;
+          }
+        }
+        if (hasRelevantChanges) break;
+      }
+      if (!hasRelevantChanges) return;
+
+      if (this.mutationDebounce) clearTimeout(this.mutationDebounce);
+      this.mutationDebounce = setTimeout(() => {
+        this.mutationDebounce = null;
+        if (!this.options.isReelModeActive()) return;
+        this.enhanceAllPosts();
+        this.applyVideosOnlyFilter();
+        if (this.feedObserver) {
+          const currentPosts = getPostElements();
+          currentPosts.forEach((p) => this.feedObserver?.observe(p));
+        }
+      }, 150);
+    });
+
+    this.mutationObserver.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  public stopObservers(): void {
+    if (this.feedObserver) {
+      this.feedObserver.disconnect();
+      this.feedObserver = null;
+    }
+    if (this.mutationObserver) {
+      this.mutationObserver.disconnect();
+      this.mutationObserver = null;
+    }
+    if (this.mutationDebounce) {
+      clearTimeout(this.mutationDebounce);
+      this.mutationDebounce = null;
+    }
+  }
+
+  public scrollToNext(): void {
+    const posts = getPostElements().filter((p) => !p.classList.contains('rr-filtered-out'));
+    const active = getClosestPostToViewport();
+    if (!active || posts.length === 0) return;
+    const currentIndex = posts.indexOf(active);
+    if (currentIndex >= 0 && currentIndex < posts.length - 1) {
+      posts[currentIndex + 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  public scrollToPrev(): void {
+    const posts = getPostElements().filter((p) => !p.classList.contains('rr-filtered-out'));
+    const active = getClosestPostToViewport();
+    if (!active || posts.length === 0) return;
+    const currentIndex = posts.indexOf(active);
+    if (currentIndex > 0) {
+      posts[currentIndex - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}

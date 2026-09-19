@@ -25,6 +25,7 @@ A curated, production-grade monorepo of modern userscripts, browser extensions, 
 
 | Project | Type | Description |
 | :--- | :--- | :--- |
+| **[reddit-reels](./reddit-reels)** | Userscript | Full-screen in-place vertical Reel/TikTok feed for Reddit with unmuted audio mutex, smart aspect ratio containment, gallery carousels, rich discussion cards, and keyboard hotkeys. |
 | **[GlideVideo](./GlideVideo)** | Userscript / MV3 Ext | Touch gesture controller for mobile web video (playback speed, volume, brightness, pinch-to-zoom, 3 themes). Available as both a userscript and a Firefox MV3 extension. |
 | **[StreamGrabber](./StreamGrabber)** | Userscript | High-performance HLS (`.m3u8`) and fMP4 stream downloader with AES-128 decryption, adaptive quality selection, and direct blob extraction. |
 | **[youtube-filter](./youtube-filter)** | Userscript | Advanced YouTube filtering by view count, upload date, video duration, keywords, and channels, with watched video dimming and customizable preset profiles. |
