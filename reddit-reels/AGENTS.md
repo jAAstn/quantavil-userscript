@@ -72,3 +72,4 @@ Guidance for agentic development on the **Reddit Reel Mode** userscript (`reddit
   bun run build
   ```
 - **Build Output**: Ensure `dist/reddit-reels.user.js` builds cleanly with `// @license MIT` in the userscript header.
+- **GreasyFork Compliance & Formatting**: The userscript bundle must be completely unminified (`minify: false`, `cssMinify: false` in `vite.config.ts`) and unobfuscated to comply with GreasyFork transparency rules. Userscript metadata must specify a comprehensive `@description`, `@homepage`, `@supportURL`, and `@license MIT`.
