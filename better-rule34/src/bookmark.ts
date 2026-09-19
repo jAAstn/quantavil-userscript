@@ -11,9 +11,6 @@ export interface Bookmark {
 
 const BOOKMARK_KEY = 'better_rule34_bookmarks_v1';
 
-/** Query params that encode pagination state and must not split listing keys. */
-const PAGE_PARAMS = ['from', 'from_videos', 'from_photos', 'page'];
-
 /**
  * Canonical key for a listing URL: pathname + sorted search minus page
  * params, minus trailing page-number path segments ("/2/").
@@ -22,16 +19,42 @@ const PAGE_PARAMS = ['from', 'from_videos', 'from_photos', 'page'];
 export function canonicalListKey(urlStr: string): string {
   try {
     const url = new URL(urlStr);
-    for (const p of PAGE_PARAMS) url.searchParams.delete(p);
-    let path = url.pathname.replace(/\/\d+\/?$/, '/');
-    if (path.length > 1 && !path.endsWith('/')) path += '/';
+    for (const k of [...url.searchParams.keys()]) {
+      if (/^from|^page$|^p$/i.test(k)) {
+        url.searchParams.delete(k);
+      }
+    }
+
+    let pathname = url.pathname;
+    // Normalize root to /latest-updates/ as they represent the same catalog
+    if (!pathname || pathname === '/') {
+      pathname = '/latest-updates/';
+    }
+
+    // Entity routes: /tags/:id/:page/, /categories/:slug/:page/, etc.
+    const entityMatch = /^\/((?:tags|categories|models|channels|playlists)\/[^/]+)\/(\d+)\/?$/.exec(pathname);
+    if (entityMatch) {
+      pathname = `/${entityMatch[1]}/`;
+    } else {
+      // General catalog routes: /latest-updates/:page/, /top-rated/:page/, etc.
+      const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
+      if (catalogMatch && !['tags', 'categories', 'models', 'channels', 'playlists'].includes(catalogMatch[1])) {
+        pathname = `/${catalogMatch[1]}/`;
+      }
+    }
+
+    if (pathname.length > 1 && !pathname.endsWith('/')) {
+      pathname += '/';
+    }
+
     const params = [...url.searchParams.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     const qs = params.map(([k, v]) => `${k}=${v}`).join('&');
-    return qs ? `${path}?${qs}` : path;
+    return qs ? `${pathname}?${qs}` : pathname;
   } catch {
     return urlStr;
   }
 }
+
 
 export interface BookmarkStore {
   getItem(key: string): string | null;
@@ -106,20 +129,32 @@ export interface BookmarkButtonOptions {
 
 const BOOKMARK_SVG = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z"/></svg>`;
 
-function refreshButton(btn: HTMLButtonElement, bm: Bookmark | null): void {
+function refreshButton(btn: HTMLButtonElement, bm: Bookmark | null, curPage = 1): void {
   btn.classList.toggle('saved', Boolean(bm));
-  btn.title = bm
-    ? `Bookmark p.${bm.page} — click: jump back, right-click: remove`
-    : 'Bookmark this page — click: save, click again: jump back';
+  if (!bm) {
+    btn.title = `Bookmark page ${curPage} — click: save`;
+  } else if (curPage < bm.page) {
+    btn.title = `Bookmark at p.${bm.page} — click: jump to p.${bm.page}, right-click: remove`;
+  } else if (curPage > bm.page) {
+    btn.title = `Current p.${curPage} (saved p.${bm.page}) — click: update to p.${curPage}, right-click: remove`;
+  } else {
+    btn.title = `Bookmarked at p.${bm.page} — click: remove, right-click: remove`;
+  }
   btn.setAttribute('aria-label', btn.title);
+}
+
+export interface BookmarkHandle {
+  cleanup: () => void;
+  refresh: () => void;
 }
 
 /**
  * Mounts the bookmark button in a fixed dock with the CTRL fab.
- * Click: save current page, or jump to the saved URL. Right-click: remove.
- * Idempotent across repeat boots. Returns cleanup (removes button only).
+ * Click: save current page, or update if further, or jump if earlier, or toggle remove.
+ * Right-click: remove.
+ * Idempotent across repeat boots.
  */
-export function mountBookmarkButton(opts: BookmarkButtonOptions): () => void {
+export function mountBookmarkButton(opts: BookmarkButtonOptions): BookmarkHandle {
   let dock = document.querySelector<HTMLElement>('.br34-dock');
   if (!dock) {
     dock = document.createElement('div');
@@ -139,28 +174,65 @@ export function mountBookmarkButton(opts: BookmarkButtonOptions): () => void {
   }
   const button = btn;
 
-  refreshButton(button, getBookmark(opts.listKey));
+  const updateState = () => {
+    refreshButton(button, getBookmark(opts.listKey), opts.getPage());
+  };
+
+  updateState();
+
+  // Guard against duplicate listener binding on re-boot
+  if (button.dataset.br34Wired === 'true') {
+    return {
+      cleanup: () => {},
+      refresh: updateState,
+    };
+  }
+  button.dataset.br34Wired = 'true';
 
   const onClick = () => {
     const existing = getBookmark(opts.listKey);
-    if (existing) {
-      window.location.href = existing.url;
+    const curPage = opts.getPage();
+    const curUrl = opts.getUrl();
+
+    if (!existing) {
+      setBookmark(opts.listKey, { page: curPage, url: curUrl });
+      updateState();
       return;
     }
-    setBookmark(opts.listKey, { page: opts.getPage(), url: opts.getUrl() });
-    refreshButton(button, getBookmark(opts.listKey));
+
+    if (curPage < existing.page) {
+      // User is earlier in catalog than bookmark -> jump to saved bookmark
+      window.location.href = existing.url;
+    } else if (curPage > existing.page) {
+      // User progressed deeper in catalog -> update bookmark to current page
+      setBookmark(opts.listKey, { page: curPage, url: curUrl });
+      updateState();
+    } else {
+      // User is on bookmarked page and clicks again -> toggle remove
+      clearBookmark(opts.listKey);
+      updateState();
+    }
   };
+
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     clearBookmark(opts.listKey);
-    refreshButton(button, null);
+    updateState();
   };
 
   button.addEventListener('click', onClick);
   button.addEventListener('contextmenu', onContextMenu);
-  return () => {
+
+  const cleanup = () => {
     button.removeEventListener('click', onClick);
     button.removeEventListener('contextmenu', onContextMenu);
     button.remove();
+    delete button.dataset.br34Wired;
+  };
+
+  return {
+    cleanup,
+    refresh: updateState,
   };
 }
+

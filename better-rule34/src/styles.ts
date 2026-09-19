@@ -204,8 +204,7 @@ body::before {
   pointer-events: none !important;
 }
 
-/* Suppress native clumsy filter and ads */
-.filters-panel,
+/* Suppress ads */
 .spot-thumb,
 .spots,
 .sidebar_ad_buttons,
@@ -218,6 +217,225 @@ ins.adsbyjuicy,
 
 .item.thumb[data-br34-hidden="true"] {
   display: none !important;
+}
+
+/* ==========================================================================
+   Rethemed Native Filters & Sorting Panel (Industrial Brutalist)
+   ========================================================================== */
+.filters-panel {
+  display: block !important;
+  background: #0e0a14 !important;
+  border: 1px solid rgba(255, 0, 85, 0.35) !important;
+  border-radius: 6px !important;
+  margin: 14px 0 20px 0 !important;
+  padding: 0 !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.7), 0 0 15px rgba(255, 0, 85, 0.1) !important;
+  overflow: hidden !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+.filters-panel__toggle {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 10px 16px !important;
+  background: rgba(16, 10, 22, 0.95) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255, 0, 85, 0.25) !important;
+  color: #ff0055 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  cursor: pointer !important;
+  outline: none !important;
+  transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+.filters-panel__toggle:hover {
+  background: rgba(255, 0, 85, 0.12) !important;
+  color: #ffffff !important;
+}
+
+.filters-panel__toggle-icon {
+  fill: #ff0055 !important;
+  width: 12px !important;
+  height: 12px !important;
+  transition: transform 0.2s ease !important;
+}
+
+.filters-panel__toggle[aria-expanded="false"] .filters-panel__toggle-icon {
+  transform: rotate(-90deg) !important;
+}
+
+.filters-panel__body {
+  padding: 14px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  background: #0a070e !important;
+}
+
+.filters-panel__section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  border-bottom: 1px dashed rgba(255, 0, 85, 0.15) !important;
+  padding-bottom: 10px !important;
+}
+
+.filters-panel__section:last-child {
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+}
+
+.filters-panel__label,
+.filters-group__label {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: #9893a6 !important;
+  margin-bottom: 2px !important;
+}
+
+.filters-panel__label svg,
+.filters-group__label svg {
+  fill: #ff0055 !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.filters-panel .btn,
+.filters-panel__controls--chips .btn,
+.filters-group__controls .btn {
+  background: #0f0b17 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 4px !important;
+  color: #a39eb0 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  padding: 5px 10px !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  transition: all 0.14s ease !important;
+  line-height: 1.3 !important;
+}
+
+.filters-panel .btn:hover,
+.filters-panel__controls--chips .btn:hover,
+.filters-group__controls .btn:hover {
+  border-color: #ff0055 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(255, 0, 85, 0.3) !important;
+}
+
+.filters-panel .btn.active,
+.filters-panel__controls--chips .btn.active,
+.filters-group__controls .btn.active {
+  background: #ff0055 !important;
+  border-color: #ff0055 !important;
+  color: #000000 !important;
+  font-weight: 900 !important;
+  box-shadow: 0 0 10px rgba(255, 0, 85, 0.55) !important;
+}
+
+.filters-panel .btn_custom {
+  position: relative !important;
+  background: #0f0b17 !important;
+  border: 1px solid rgba(255, 0, 85, 0.35) !important;
+  color: #ffffff !important;
+}
+
+.filters-panel .date-filter-dropdown,
+.filters-panel .filter-custom {
+  background: #0e0a14 !important;
+  border: 1px solid #ff0055 !important;
+  border-radius: 4px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9), 0 0 15px rgba(255, 0, 85, 0.25) !important;
+  padding: 4px 0 !important;
+  z-index: 1000 !important;
+}
+
+.filters-panel .date-filter-dropdown li a,
+.filters-panel .filter-custom li a {
+  color: #c5c2d3 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  padding: 5px 12px !important;
+  display: block !important;
+  text-decoration: none !important;
+  transition: background 0.12s ease, color 0.12s ease !important;
+}
+
+.filters-panel .date-filter-dropdown li a:hover,
+.filters-panel .filter-custom li a:hover {
+  background: rgba(255, 0, 85, 0.15) !important;
+  color: #ff0055 !important;
+}
+
+.filters-panel .date-filter-dropdown li a.active,
+.filters-panel .filter-custom li a.active {
+  background: #ff0055 !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+}
+
+.filters-panel input[type="date"],
+.filters-panel input[type="number"],
+.filters-panel .duration-filter__input {
+  background: #050307 !important;
+  border: 1px solid rgba(255, 0, 85, 0.35) !important;
+  border-radius: 4px !important;
+  color: #ffffff !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  padding: 4px 8px !important;
+  outline: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.filters-panel input[type="date"]:focus,
+.filters-panel input[type="number"]:focus,
+.filters-panel .duration-filter__input:focus {
+  border-color: #ff0055 !important;
+  box-shadow: 0 0 8px rgba(255, 0, 85, 0.4) !important;
+}
+
+.filters-panel .duration-filter__label {
+  color: #9893a6 !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  margin-right: 4px !important;
+}
+
+.filters-panel .duration-filter__apply {
+  background: rgba(18, 12, 24, 0.9) !important;
+  border: 1px solid rgba(255, 0, 85, 0.4) !important;
+  border-radius: 4px !important;
+  color: #e5e5eb !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  padding: 4px 10px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.filters-panel .duration-filter__apply:hover {
+  background: #ff0055 !important;
+  color: #000000 !important;
+  box-shadow: 0 0 8px rgba(255, 0, 85, 0.6) !important;
 }
 
 /* ==========================================================================

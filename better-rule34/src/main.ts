@@ -1,6 +1,6 @@
 import { cleanAds } from './adcleaner';
 import { AutoPager, findVideosContainer, isListingPage, unclipBodyOverflow } from './autopager';
-import { canonicalListKey, mountBookmarkButton } from './bookmark';
+import { canonicalListKey, mountBookmarkButton, type BookmarkHandle } from './bookmark';
 import { FilterBar } from './filterbar';
 import { hardenAnchor, hardenAnchorsIn, initNewTab, isWatchedId } from './newtab';
 import { extractCardData, isAdCard, matchesClientFilter } from './parse';
@@ -16,6 +16,7 @@ let managedCards: ManagedCard[] = [];
 let filterBar: FilterBar | null = null;
 let autoPager: AutoPager | null = null;
 let currentFilter: FilterState | null = null;
+let bookmarkHandle: BookmarkHandle | null = null;
 
 function injectStyles(): void {
   if (document.getElementById('br34-styles')) return;
@@ -140,6 +141,7 @@ function boot(): void {
       onPageLoaded: () => {
         cleanAds();
         unclipBodyOverflow();
+        bookmarkHandle?.refresh();
       },
     });
     autoPager.init();
@@ -150,10 +152,10 @@ function boot(): void {
   // Bookmark button docked next to the CTRL fab (idempotent on re-boot).
   if (filterBar && autoPager) {
     const pager = autoPager;
-    mountBookmarkButton({
+    bookmarkHandle = mountBookmarkButton({
       fab: filterBar.fabElement,
       listKey,
-      getPage: () => pager.getPagesLoaded(),
+      getPage: () => pager.getCurrentPage(),
       getUrl: () => pager.getCurrentPageUrl(),
     });
   }

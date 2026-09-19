@@ -22,7 +22,7 @@
 - Video cards: `.item.thumb` in container `.thumbs` (often `#custom_list_videos_*_items` or `.content_general .thumbs`).
 - Real video cards have `data-video-card-id` or `a[href*="/video/"]`; ad cards have `<header>AD</header>`, `iframe`, or `/v1/d.php` links. Cards with neither id nor href are dropped (never link to homepage).
 - Image lazy loading uses `data-original` and `data-webp`; appended cards must have `img.src` populated with `loading="lazy"`.
-- Native filter panel: `.filters-panel` is hidden by default (no toggle; console is the filter UI).
+- Native filter panel: `.filters-panel` is rethemed with industrial brutalist styling, collapsible toggle, and tactile controls.
 - Pagination links: `.pagination .item.pager.next a` holds next relative URL; `data-parameters` carries server offsets on async routes. Search-route offsets are opaque — a missing server link means stop, never fabricate `from_videos`.
 - Comment/date hides are card-scoped (`.item.thumb ...`); watch-page `#comments_box` is untouched.
 

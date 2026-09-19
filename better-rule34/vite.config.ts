@@ -10,12 +10,15 @@ export default defineConfig({
       userscript: {
         name: 'Better Rule34Video',
         namespace: 'https://github.com/quantavil/userscript/',
-        version: '1.2.0',
+        version: '1.3.0',
         description:
           'Streamlined filter bar, instant client search & filtering, ad cleaner, and seamless auto next page infinite scroll for Rule34Video.',
-        author: 'quantavil',
-        match: ['*://*.rule35video.com/*', '*://rule35video.com/*'],
-        grant: [],
+        match: [
+          '*://*.rule34video.com/*',
+          '*://rule34video.com/*',
+          '*://*.rule35video.com/*',
+          '*://rule35video.com/*',
+        ],
         license: 'MIT',
         'run-at': 'document-end',
       },

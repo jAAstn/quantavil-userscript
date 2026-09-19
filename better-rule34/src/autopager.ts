@@ -61,7 +61,7 @@ export function parseNextLink(
     return { url: resolved || null, fromParam: null };
   }
   if (dataParams) {
-    const match = /(?:from_videos|from):(\d+)/.exec(dataParams);
+    const match = /(?:from_videos(?:\+from_albums)?|from_videos|from_albums|from):(\d+)/i.exec(dataParams);
     if (match) {
       return { url: null, fromParam: parseInt(match[1], 10) };
     }
@@ -151,14 +151,27 @@ export class AutoPager {
   private detectCurrentPageNumber(): number {
     try {
       const url = new URL(window.location.href);
-      const fromParam = url.searchParams.get('from_videos') || url.searchParams.get('from');
+      const fromParam =
+        url.searchParams.get('from_videos') ||
+        url.searchParams.get('from_videos+from_albums') ||
+        url.searchParams.get('from') ||
+        url.searchParams.get('page') ||
+        url.searchParams.get('p');
       if (fromParam) {
         const p = parseInt(fromParam, 10);
         if (!isNaN(p) && p > 0) return p;
       }
-      const pathMatch = /\/(\d+)\/?$/.exec(url.pathname);
-      if (pathMatch) {
-        const p = parseInt(pathMatch[1], 10);
+      const pathname = url.pathname;
+      // Entity routes with page number: /tags/123/2/, /categories/abc/2/, /models/123/2/
+      const entityMatch = /^\/(?:tags|categories|models|channels|playlists)\/[^/]+\/(\d+)\/?$/.exec(pathname);
+      if (entityMatch) {
+        const p = parseInt(entityMatch[1], 10);
+        if (!isNaN(p) && p > 0) return p;
+      }
+      // General catalog routes: /latest-updates/2/, /top-rated/2/, /most-viewed/2/
+      const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
+      if (catalogMatch && !['tags', 'categories', 'models', 'channels', 'playlists', 'video'].includes(catalogMatch[1])) {
+        const p = parseInt(catalogMatch[2], 10);
         if (!isNaN(p) && p > 0) return p;
       }
     } catch {
@@ -211,16 +224,30 @@ export class AutoPager {
       // If on search route, KVS uses query parameter ?from_videos=N
       if (pathname.includes('/search/')) {
         url.searchParams.set('from_videos', String(nextPageNum));
+        url.searchParams.delete('from_videos+from_albums');
         return url.toString();
       }
 
-      // Check if path already ends in a page number like /2/ or /3/
+      // Entity routes: /tags/:id/:page/, /categories/:slug/:page/, etc.
+      const entityMatch = /^(\/(?:tags|categories|models|channels|playlists)\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
+      if (entityMatch) {
+        url.pathname = `${entityMatch[1]}/${nextPageNum}/`;
+        return url.toString();
+      }
+
+      // Catalog routes: /latest-updates/:page/, /top-rated/:page/, etc.
+      const catalogMatch = /^(\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
+      if (catalogMatch && !['tags', 'categories', 'models', 'channels', 'playlists', 'video'].includes(catalogMatch[1].slice(1))) {
+        url.pathname = `${catalogMatch[1]}/${nextPageNum}/`;
+        return url.toString();
+      }
+
+      // Fallback
       if (/\/\d+\/?$/.test(pathname)) {
         url.pathname = pathname.replace(/\/\d+\/?$/, `/${nextPageNum}/`);
         return url.toString();
       }
 
-      // If at clean category/tag path, append /N/
       if (pathname.endsWith('/')) {
         url.pathname = `${pathname}${nextPageNum}/`;
         return url.toString();
@@ -340,6 +367,7 @@ export class AutoPager {
     this.updateStatusDisplay();
 
     const fetchUrl = this.nextUrl;
+    let hasError = false;
 
     try {
       const response = await fetch(fetchUrl, {
@@ -433,6 +461,7 @@ export class AutoPager {
         }
       }
     } catch (err) {
+      hasError = true;
       console.error('[Better Rule34] AutoPager error:', err);
       if (this.statusContainer) {
         this.statusContainer.innerHTML = `
@@ -446,7 +475,9 @@ export class AutoPager {
       }
     } finally {
       this.isLoading = false;
-      this.updateStatusDisplay();
+      if (!hasError) {
+        this.updateStatusDisplay();
+      }
       unclipBodyOverflow();
     }
   }

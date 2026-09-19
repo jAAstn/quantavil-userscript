@@ -52,9 +52,21 @@ describe('shouldNewTabClick', () => {
 
 describe('canonicalListKey', () => {
   it('strips page params and trailing page segments, sorts the rest', () => {
+    expect(canonicalListKey(`${origin}`)).toBe('/latest-updates/');
+    expect(canonicalListKey(`${origin}/`)).toBe('/latest-updates/');
+    expect(canonicalListKey(`${origin}/latest-updates/`)).toBe('/latest-updates/');
     expect(canonicalListKey(`${origin}/latest-updates/3/?from_videos=3`)).toBe('/latest-updates/');
+    expect(canonicalListKey(`${origin}/latest-updates/32/`)).toBe('/latest-updates/');
     expect(canonicalListKey(`${origin}/search/?q=a&from_videos=48&q=a`)).toBe('/search/?q=a&q=a');
+    expect(canonicalListKey(`${origin}/search/?q=overwatch&from_videos+from_albums=32`)).toBe('/search/?q=overwatch');
     expect(canonicalListKey(`${origin}/tags/futa/2/`)).toBe('/tags/futa/');
+    // Preserves tag ID while stripping page number
+    expect(canonicalListKey(`${origin}/tags/5568/`)).toBe('/tags/5568/');
+    expect(canonicalListKey(`${origin}/tags/5568/2/`)).toBe('/tags/5568/');
+    expect(canonicalListKey(`${origin}/tags/5568/32/`)).toBe('/tags/5568/');
+    // Preserves category slug while stripping page number
+    expect(canonicalListKey(`${origin}/categories/ben-10/`)).toBe('/categories/ben-10/');
+    expect(canonicalListKey(`${origin}/categories/ben-10/2/`)).toBe('/categories/ben-10/');
   });
 });
 

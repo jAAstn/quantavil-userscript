@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Better Rule34Video
 // @namespace    https://github.com/quantavil/userscript/
-// @version      1.2.0
+// @version      1.3.0
 // @author       quantavil
 // @description  Streamlined filter bar, instant client search & filtering, ad cleaner, and seamless auto next page infinite scroll for Rule34Video.
 // @license      MIT
 // @match        *://*.rule34video.com/*
 // @match        *://rule34video.com/*
+// @match        *://*.rule35video.com/*
+// @match        *://rule35video.com/*
 // @run-at       document-end
 // ==/UserScript==
 
@@ -373,7 +375,7 @@
       return { url: resolved || null, fromParam: null };
     }
     if (dataParams) {
-      const match = /(?:from_videos|from):(\d+)/.exec(dataParams);
+      const match = /(?:from_videos(?:\+from_albums)?|from_videos|from_albums|from):(\d+)/i.exec(dataParams);
       if (match) {
         return { url: null, fromParam: parseInt(match[1], 10) };
       }
@@ -445,14 +447,20 @@
     detectCurrentPageNumber() {
       try {
         const url = new URL(window.location.href);
-        const fromParam = url.searchParams.get("from_videos") || url.searchParams.get("from");
+        const fromParam = url.searchParams.get("from_videos") || url.searchParams.get("from_videos+from_albums") || url.searchParams.get("from") || url.searchParams.get("page") || url.searchParams.get("p");
         if (fromParam) {
           const p = parseInt(fromParam, 10);
           if (!isNaN(p) && p > 0) return p;
         }
-        const pathMatch = /\/(\d+)\/?$/.exec(url.pathname);
-        if (pathMatch) {
-          const p = parseInt(pathMatch[1], 10);
+        const pathname = url.pathname;
+        const entityMatch = /^\/(?:tags|categories|models|channels|playlists)\/[^/]+\/(\d+)\/?$/.exec(pathname);
+        if (entityMatch) {
+          const p = parseInt(entityMatch[1], 10);
+          if (!isNaN(p) && p > 0) return p;
+        }
+        const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
+        if (catalogMatch && !["tags", "categories", "models", "channels", "playlists", "video"].includes(catalogMatch[1])) {
+          const p = parseInt(catalogMatch[2], 10);
           if (!isNaN(p) && p > 0) return p;
         }
       } catch {
@@ -492,6 +500,17 @@
         }
         if (pathname.includes("/search/")) {
           url.searchParams.set("from_videos", String(nextPageNum));
+          url.searchParams.delete("from_videos+from_albums");
+          return url.toString();
+        }
+        const entityMatch = /^(\/(?:tags|categories|models|channels|playlists)\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
+        if (entityMatch) {
+          url.pathname = `${entityMatch[1]}/${nextPageNum}/`;
+          return url.toString();
+        }
+        const catalogMatch = /^(\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
+        if (catalogMatch && !["tags", "categories", "models", "channels", "playlists", "video"].includes(catalogMatch[1].slice(1))) {
+          url.pathname = `${catalogMatch[1]}/${nextPageNum}/`;
           return url.toString();
         }
         if (/\/\d+\/?$/.test(pathname)) {
@@ -600,6 +619,7 @@
       this.isLoading = true;
       this.updateStatusDisplay();
       const fetchUrl = this.nextUrl;
+      let hasError = false;
       try {
         const response = await fetch(fetchUrl, {
           credentials: "include",
@@ -673,6 +693,7 @@
           }
         }
       } catch (err) {
+        hasError = true;
         console.error("[Better Rule34] AutoPager error:", err);
         if (this.statusContainer) {
           this.statusContainer.innerHTML = `
@@ -686,7 +707,9 @@
         }
       } finally {
         this.isLoading = false;
-        this.updateStatusDisplay();
+        if (!hasError) {
+          this.updateStatusDisplay();
+        }
         unclipBodyOverflow();
       }
     }
@@ -707,16 +730,33 @@
     }
   }
   const BOOKMARK_KEY = "better_rule34_bookmarks_v1";
-  const PAGE_PARAMS = ["from", "from_videos", "from_photos", "page"];
   function canonicalListKey(urlStr) {
     try {
       const url = new URL(urlStr);
-      for (const p of PAGE_PARAMS) url.searchParams.delete(p);
-      let path = url.pathname.replace(/\/\d+\/?$/, "/");
-      if (path.length > 1 && !path.endsWith("/")) path += "/";
+      for (const k of [...url.searchParams.keys()]) {
+        if (/^from|^page$|^p$/i.test(k)) {
+          url.searchParams.delete(k);
+        }
+      }
+      let pathname = url.pathname;
+      if (!pathname || pathname === "/") {
+        pathname = "/latest-updates/";
+      }
+      const entityMatch = /^\/((?:tags|categories|models|channels|playlists)\/[^/]+)\/(\d+)\/?$/.exec(pathname);
+      if (entityMatch) {
+        pathname = `/${entityMatch[1]}/`;
+      } else {
+        const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
+        if (catalogMatch && !["tags", "categories", "models", "channels", "playlists"].includes(catalogMatch[1])) {
+          pathname = `/${catalogMatch[1]}/`;
+        }
+      }
+      if (pathname.length > 1 && !pathname.endsWith("/")) {
+        pathname += "/";
+      }
       const params = [...url.searchParams.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
       const qs = params.map(([k, v]) => `${k}=${v}`).join("&");
-      return qs ? `${path}?${qs}` : path;
+      return qs ? `${pathname}?${qs}` : pathname;
     } catch {
       return urlStr;
     }
@@ -770,9 +810,17 @@
     }
   }
   const BOOKMARK_SVG = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z"/></svg>`;
-  function refreshButton(btn, bm) {
+  function refreshButton(btn, bm, curPage = 1) {
     btn.classList.toggle("saved", Boolean(bm));
-    btn.title = bm ? `Bookmark p.${bm.page} — click: jump back, right-click: remove` : "Bookmark this page — click: save, click again: jump back";
+    if (!bm) {
+      btn.title = `Bookmark page ${curPage} — click: save`;
+    } else if (curPage < bm.page) {
+      btn.title = `Bookmark at p.${bm.page} — click: jump to p.${bm.page}, right-click: remove`;
+    } else if (curPage > bm.page) {
+      btn.title = `Current p.${curPage} (saved p.${bm.page}) — click: update to p.${curPage}, right-click: remove`;
+    } else {
+      btn.title = `Bookmarked at p.${bm.page} — click: remove, right-click: remove`;
+    }
     btn.setAttribute("aria-label", btn.title);
   }
   function mountBookmarkButton(opts) {
@@ -792,27 +840,53 @@
       dock.prepend(btn);
     }
     const button = btn;
-    refreshButton(button, getBookmark(opts.listKey));
+    const updateState = () => {
+      refreshButton(button, getBookmark(opts.listKey), opts.getPage());
+    };
+    updateState();
+    if (button.dataset.br34Wired === "true") {
+      return {
+        cleanup: () => {
+        },
+        refresh: updateState
+      };
+    }
+    button.dataset.br34Wired = "true";
     const onClick = () => {
       const existing = getBookmark(opts.listKey);
-      if (existing) {
-        window.location.href = existing.url;
+      const curPage = opts.getPage();
+      const curUrl = opts.getUrl();
+      if (!existing) {
+        setBookmark(opts.listKey, { page: curPage, url: curUrl });
+        updateState();
         return;
       }
-      setBookmark(opts.listKey, { page: opts.getPage(), url: opts.getUrl() });
-      refreshButton(button, getBookmark(opts.listKey));
+      if (curPage < existing.page) {
+        window.location.href = existing.url;
+      } else if (curPage > existing.page) {
+        setBookmark(opts.listKey, { page: curPage, url: curUrl });
+        updateState();
+      } else {
+        clearBookmark(opts.listKey);
+        updateState();
+      }
     };
     const onContextMenu = (e) => {
       e.preventDefault();
       clearBookmark(opts.listKey);
-      refreshButton(button, null);
+      updateState();
     };
     button.addEventListener("click", onClick);
     button.addEventListener("contextmenu", onContextMenu);
-    return () => {
+    const cleanup = () => {
       button.removeEventListener("click", onClick);
       button.removeEventListener("contextmenu", onContextMenu);
       button.remove();
+      delete button.dataset.br34Wired;
+    };
+    return {
+      cleanup,
+      refresh: updateState
     };
   }
   const STORAGE_KEY = "better_rule34_settings";
@@ -1402,8 +1476,7 @@ body::before {
   pointer-events: none !important;
 }
 
-/* Suppress native clumsy filter and ads */
-.filters-panel,
+/* Suppress ads */
 .spot-thumb,
 .spots,
 .sidebar_ad_buttons,
@@ -1416,6 +1489,225 @@ ins.adsbyjuicy,
 
 .item.thumb[data-br34-hidden="true"] {
   display: none !important;
+}
+
+/* ==========================================================================
+   Rethemed Native Filters & Sorting Panel (Industrial Brutalist)
+   ========================================================================== */
+.filters-panel {
+  display: block !important;
+  background: #0e0a14 !important;
+  border: 1px solid rgba(255, 0, 85, 0.35) !important;
+  border-radius: 6px !important;
+  margin: 14px 0 20px 0 !important;
+  padding: 0 !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.7), 0 0 15px rgba(255, 0, 85, 0.1) !important;
+  overflow: hidden !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+.filters-panel__toggle {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 10px 16px !important;
+  background: rgba(16, 10, 22, 0.95) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255, 0, 85, 0.25) !important;
+  color: #ff0055 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  cursor: pointer !important;
+  outline: none !important;
+  transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+.filters-panel__toggle:hover {
+  background: rgba(255, 0, 85, 0.12) !important;
+  color: #ffffff !important;
+}
+
+.filters-panel__toggle-icon {
+  fill: #ff0055 !important;
+  width: 12px !important;
+  height: 12px !important;
+  transition: transform 0.2s ease !important;
+}
+
+.filters-panel__toggle[aria-expanded="false"] .filters-panel__toggle-icon {
+  transform: rotate(-90deg) !important;
+}
+
+.filters-panel__body {
+  padding: 14px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  background: #0a070e !important;
+}
+
+.filters-panel__section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  border-bottom: 1px dashed rgba(255, 0, 85, 0.15) !important;
+  padding-bottom: 10px !important;
+}
+
+.filters-panel__section:last-child {
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+}
+
+.filters-panel__label,
+.filters-group__label {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: #9893a6 !important;
+  margin-bottom: 2px !important;
+}
+
+.filters-panel__label svg,
+.filters-group__label svg {
+  fill: #ff0055 !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.filters-panel .btn,
+.filters-panel__controls--chips .btn,
+.filters-group__controls .btn {
+  background: #0f0b17 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 4px !important;
+  color: #a39eb0 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  padding: 5px 10px !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  transition: all 0.14s ease !important;
+  line-height: 1.3 !important;
+}
+
+.filters-panel .btn:hover,
+.filters-panel__controls--chips .btn:hover,
+.filters-group__controls .btn:hover {
+  border-color: #ff0055 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(255, 0, 85, 0.3) !important;
+}
+
+.filters-panel .btn.active,
+.filters-panel__controls--chips .btn.active,
+.filters-group__controls .btn.active {
+  background: #ff0055 !important;
+  border-color: #ff0055 !important;
+  color: #000000 !important;
+  font-weight: 900 !important;
+  box-shadow: 0 0 10px rgba(255, 0, 85, 0.55) !important;
+}
+
+.filters-panel .btn_custom {
+  position: relative !important;
+  background: #0f0b17 !important;
+  border: 1px solid rgba(255, 0, 85, 0.35) !important;
+  color: #ffffff !important;
+}
+
+.filters-panel .date-filter-dropdown,
+.filters-panel .filter-custom {
+  background: #0e0a14 !important;
+  border: 1px solid #ff0055 !important;
+  border-radius: 4px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9), 0 0 15px rgba(255, 0, 85, 0.25) !important;
+  padding: 4px 0 !important;
+  z-index: 1000 !important;
+}
+
+.filters-panel .date-filter-dropdown li a,
+.filters-panel .filter-custom li a {
+  color: #c5c2d3 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  padding: 5px 12px !important;
+  display: block !important;
+  text-decoration: none !important;
+  transition: background 0.12s ease, color 0.12s ease !important;
+}
+
+.filters-panel .date-filter-dropdown li a:hover,
+.filters-panel .filter-custom li a:hover {
+  background: rgba(255, 0, 85, 0.15) !important;
+  color: #ff0055 !important;
+}
+
+.filters-panel .date-filter-dropdown li a.active,
+.filters-panel .filter-custom li a.active {
+  background: #ff0055 !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+}
+
+.filters-panel input[type="date"],
+.filters-panel input[type="number"],
+.filters-panel .duration-filter__input {
+  background: #050307 !important;
+  border: 1px solid rgba(255, 0, 85, 0.35) !important;
+  border-radius: 4px !important;
+  color: #ffffff !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  padding: 4px 8px !important;
+  outline: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.filters-panel input[type="date"]:focus,
+.filters-panel input[type="number"]:focus,
+.filters-panel .duration-filter__input:focus {
+  border-color: #ff0055 !important;
+  box-shadow: 0 0 8px rgba(255, 0, 85, 0.4) !important;
+}
+
+.filters-panel .duration-filter__label {
+  color: #9893a6 !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  margin-right: 4px !important;
+}
+
+.filters-panel .duration-filter__apply {
+  background: rgba(18, 12, 24, 0.9) !important;
+  border: 1px solid rgba(255, 0, 85, 0.4) !important;
+  border-radius: 4px !important;
+  color: #e5e5eb !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  padding: 4px 10px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.filters-panel .duration-filter__apply:hover {
+  background: #ff0055 !important;
+  color: #000000 !important;
+  box-shadow: 0 0 8px rgba(255, 0, 85, 0.6) !important;
 }
 
 /* ==========================================================================
@@ -1989,6 +2281,7 @@ ins.adsbyjuicy,
   let filterBar = null;
   let autoPager = null;
   let currentFilter = null;
+  let bookmarkHandle = null;
   function injectStyles() {
     if (document.getElementById("br34-styles")) return;
     const style = document.createElement("style");
@@ -2085,6 +2378,7 @@ ins.adsbyjuicy,
         onPageLoaded: () => {
           cleanAds();
           unclipBodyOverflow();
+          bookmarkHandle == null ? void 0 : bookmarkHandle.refresh();
         }
       });
       autoPager.init();
@@ -2092,10 +2386,10 @@ ins.adsbyjuicy,
     applyFilter();
     if (filterBar && autoPager) {
       const pager = autoPager;
-      mountBookmarkButton({
+      bookmarkHandle = mountBookmarkButton({
         fab: filterBar.fabElement,
         listKey,
-        getPage: () => pager.getPagesLoaded(),
+        getPage: () => pager.getCurrentPage(),
         getUrl: () => pager.getCurrentPageUrl()
       });
     }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { parseNextLink } from '../src/autopager';
 import {
   DEFAULT_FILTER,
   matchesClientFilter,
@@ -26,6 +27,28 @@ describe('parsers', () => {
     expect(resolveNextPageUrl(current, '/latest-updates/2/')).toBe(
       'https://rule34video.com/latest-updates/2/?post_date_from=2026-01-01',
     );
+  });
+
+  it('parses next link from DOM or data-parameters with various from prefixes', () => {
+    const el1 = {
+      querySelector: () => ({
+        getAttribute: (attr: string) => (attr === 'data-parameters' ? 'q:overwatch;sort_by:;from_videos+from_albums:33' : '#search'),
+      }),
+    } as unknown as Element;
+    expect(parseNextLink(el1, 'https://rule34video.com/search/overwatch/')).toEqual({
+      url: null,
+      fromParam: 33,
+    });
+
+    const el2 = {
+      querySelector: () => ({
+        getAttribute: (attr: string) => (attr === 'href' ? '/latest-updates/33/' : null),
+      }),
+    } as unknown as Element;
+    expect(parseNextLink(el2, 'https://rule34video.com/latest-updates/32/')).toEqual({
+      url: 'https://rule34video.com/latest-updates/33/',
+      fromParam: null,
+    });
   });
 });
 
