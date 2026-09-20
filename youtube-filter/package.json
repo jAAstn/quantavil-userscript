@@ -1,0 +1,29 @@
+{
+  "name": "youtube-filter",
+  "private": true,
+  "version": "3.3.0",
+  "author": "quantavil (https://github.com/quantavil)",
+  "homepage": "https://github.com/quantavil/userscript",
+  "description": "Filter YouTube videos by views, upload date, duration, keywords, and channels, with watched video dimming and customizable profiles.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "tsc": "tsc",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude test/e2e.test.ts",
+    "test:e2e": "vitest run test/e2e.test.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0",
+    "happy-dom": "^20.11.6",
+    "playwright": "^1.62.1",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "typescript": "~7.0.2",
+    "vite": "^8.2.2",
+    "vite-plugin-monkey": "^8.1.0",
+    "vitest": "^4.1.11"
+  }
+}
