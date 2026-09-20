@@ -163,8 +163,37 @@ describe('Direct DOM resolveMedia', () => {
 
     const res = resolveMedia(post);
     assert.equal(res.type, 'iframe');
-    assert.equal(res.src, 'https://www.redgifs.com/ifr/fancyjumpingfrog');
+    assert.equal(res.src, 'https://www.redgifs.com/ifr/fancyjumpingfrog?muted=0');
     assert.equal(res.hasAudio, true);
+  });
+
+  it('normalizes RedGifs iframe muted param both directions', () => {
+    const { normalizeIframeSrc } = require('../../src/media/audio-manager');
+    assert.equal(
+      normalizeIframeSrc('https://www.redgifs.com/ifr/abc?autoplay=1&muted=1', false),
+      'https://www.redgifs.com/ifr/abc?autoplay=1&muted=0'
+    );
+    assert.equal(
+      normalizeIframeSrc('https://www.redgifs.com/ifr/abc?autoplay=1&muted=0', true),
+      'https://www.redgifs.com/ifr/abc?autoplay=1&muted=1'
+    );
+    assert.equal(
+      normalizeIframeSrc('https://www.redgifs.com/ifr/abc', false),
+      'https://www.redgifs.com/ifr/abc?muted=0'
+    );
+  });
+
+  it('volume level persists and drives mute state', () => {
+    const m = new AudioManager(false, 0.8);
+    assert.equal(m.volume, 0.8);
+    m.setVolume(0);
+    assert.equal(m.volume, 0);
+    assert.equal(m.isMuted, true);
+    m.setVolume(0.5);
+    assert.equal(m.volume, 0.5);
+    assert.equal(m.isMuted, false);
+    m.adjustVolume(0.2);
+    assert.equal(m.volume, 0.7);
   });
 
   it('resolves image from element', () => {

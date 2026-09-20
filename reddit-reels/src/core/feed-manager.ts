@@ -5,7 +5,7 @@
  */
 
 import { ReelPost, parsePostElement } from '../extractor';
-import { audioManager, applyAudioState, resolveMedia } from '../media';
+import { audioManager, applyAudioState, normalizeIframeSrc, resolveMedia } from '../media';
 import { renderLinkCard, renderTextCard } from '../cards';
 import { renderReelOverlay, syncOverlaySubtitlesButtons } from '../ui/overlay';
 import { unconstrainPostMedia, restorePostMedia, applySubtitlesState } from './unconstrainer';
@@ -200,21 +200,16 @@ export class FeedManager {
           const iframe = document.createElement('iframe');
           // Honor the global mute state from the start so a RedGifs embed
           // boots unmuted by default (audio on) and muted when global is muted.
-          let src = media.src;
-          try {
-            if (audioManager.isMuted && /muted=0/.test(src)) {
-              src = src.replace(/muted=0/g, 'muted=1');
-            } else if (!audioManager.isMuted && /muted=1/.test(src)) {
-              src = src.replace(/muted=1/g, 'muted=0');
-            }
-          } catch {}
+          const src = normalizeIframeSrc(media.src, audioManager.isMuted);
           iframe.src = src;
           iframe.className = 'rr-embedded-iframe';
+          iframe.tabIndex = -1;
           iframe.setAttribute('loading', 'eager');
           iframe.setAttribute('frameborder', '0');
           iframe.setAttribute('allowfullscreen', 'true');
           iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
           container.appendChild(iframe);
+          try { iframe.blur(); } catch {}
           audioManager.invalidateVideoCache(postEl);
         }
       }

@@ -4,15 +4,17 @@
  */
 
 import { audioManager, unlockAudio, applyAudioState } from '../media';
-import { showPlayPulse, showScalePulse } from '../ui/pulse';
+import { showPlayPulse, showScalePulse, showVolumePulse } from '../ui/pulse';
 
 export const POST_SELECTORS = 'shreddit-post, article, [data-testid="post-container"], .Post';
+export const VOLUME_STEP = 0.1;
 
 export interface InputControllerOptions {
   isReelModeActive: () => boolean;
   getActivePost: () => HTMLElement | null;
   onExit: () => void;
   onToggleMute: () => void;
+  onVolumeChange?: (level: number, muted: boolean) => void;
   onToggleSubtitles?: () => void;
   onNextPost?: () => void;
   onPrevPost?: () => void;
@@ -38,7 +40,7 @@ export class InputController {
 
     if (!this.keydownListener) {
       this.keydownListener = (e: KeyboardEvent) => this.handleKeyDown(e);
-      window.addEventListener('keydown', this.keydownListener);
+      window.addEventListener('keydown', this.keydownListener, true);
     }
   }
 
@@ -49,7 +51,7 @@ export class InputController {
     }
 
     if (this.keydownListener) {
-      window.removeEventListener('keydown', this.keydownListener);
+      window.removeEventListener('keydown', this.keydownListener, true);
       this.keydownListener = null;
     }
 
@@ -67,7 +69,7 @@ export class InputController {
     if (video) {
       const wasPaused = video.paused;
       if (wasPaused) {
-        applyAudioState(post, audioManager.isMuted);
+        applyAudioState(post, audioManager.isMuted, audioManager.volume);
         video.play().catch(() => {});
       } else {
         video.pause();
@@ -75,6 +77,9 @@ export class InputController {
 
       // Show pulse animation
       showPlayPulse(wasPaused);
+    } else if (post.querySelector('iframe')) {
+      // RedGifs/iframe posts have no <video> to pause; audible state was
+      // already re-asserted on tap in handleTap, nothing deferred to do.
     }
   }
 
@@ -96,6 +101,7 @@ export class InputController {
 
     // On any tap, unlock audio permission
     unlockAudio();
+    audioManager.reassertActiveIframeUnmute();
 
     // Check for double-tap to toggle Fit (contain) vs Fill (cover).
     // Single-tap play/pause is deferred by 320ms so a double-tap does not
@@ -135,17 +141,36 @@ export class InputController {
 
   private handleKeyDown(e: KeyboardEvent): void {
     if (!this.options.isReelModeActive()) return;
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
 
     if (e.key === 'Escape') {
       this.options.onExit();
     } else if (e.key === 'm' || e.key === 'M') {
       this.options.onToggleMute();
+    } else if (e.key === '+' || e.key === '=' || (e.shiftKey && e.key === 'ArrowUp')) {
+      e.preventDefault();
+      this.changeVolume(VOLUME_STEP);
+    } else if (e.key === '-' || e.key === '_' || (e.shiftKey && e.key === 'ArrowDown')) {
+      e.preventDefault();
+      this.changeVolume(-VOLUME_STEP);
     } else if (e.key === 'c' || e.key === 'C') {
       this.options.onToggleSubtitles?.();
-    } else if (e.key === 'j' || e.key === 'J' || e.key === 'ArrowDown') {
+    } else if (e.key === 'j' || e.key === 'J' || (!e.shiftKey && e.key === 'ArrowDown')) {
+      e.preventDefault();
       this.options.onNextPost?.();
-    } else if (e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp') {
+    } else if (e.key === 'k' || e.key === 'K' || (!e.shiftKey && e.key === 'ArrowUp')) {
+      e.preventDefault();
       this.options.onPrevPost?.();
     }
+  }
+
+  private changeVolume(delta: number): void {
+    unlockAudio();
+    const post = this.options.getActivePost();
+    const level = audioManager.adjustVolume(delta, post || undefined);
+    audioManager.reassertActiveIframeUnmute();
+    showVolumePulse(level, audioManager.isMuted);
+    this.options.onVolumeChange?.(level, audioManager.isMuted);
   }
 }

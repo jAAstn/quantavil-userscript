@@ -49,6 +49,66 @@ function persistMuteState(muted: boolean): void {
   } catch {}
 }
 
+const VOLUME_KEY = 'reddit_reels_volume';
+
+function getInitialVolume(): number {
+  try {
+    if (typeof GM_getValue === 'function') {
+      const gmVal = GM_getValue<number | null>(VOLUME_KEY, null);
+      if (typeof gmVal === 'number' && gmVal >= 0 && gmVal <= 1) return gmVal;
+    }
+  } catch {}
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(VOLUME_KEY);
+      if (raw !== null) {
+        const n = parseFloat(raw);
+        if (!Number.isNaN(n) && n >= 0 && n <= 1) return n;
+      }
+    }
+  } catch {}
+  return 1.0;
+}
+
+function persistVolume(volume: number): void {
+  try {
+    if (typeof GM_setValue === 'function') {
+      GM_setValue(VOLUME_KEY, volume);
+    }
+  } catch {}
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(VOLUME_KEY, String(volume));
+    }
+  } catch {}
+}
+
+/**
+ * RedGifs / Streamable `ifr/` players ignore generic postMessage mute.
+ * The `muted=0|1` query param at load is the source of truth.
+ */
+export function normalizeIframeSrc(src: string, isMuted: boolean): string {
+  if (!src || src === 'about:blank') return src;
+  const target = isMuted ? 'muted=1' : 'muted=0';
+  if (/[?&]muted=[01]/.test(src)) {
+    return src.replace(/([?&]muted=)[01]/g, `$1${isMuted ? '1' : '0'}`);
+  }
+  const sep = src.includes('?') ? '&' : '?';
+  return `${src}${sep}${target}`;
+}
+
+/** Keep keyboard focus on the parent page so volume hotkeys keep working. */
+export function blurIframes(container: HTMLElement): void {
+  try {
+    container.querySelectorAll<HTMLIFrameElement>('iframe').forEach((ifr) => {
+      try {
+        ifr.tabIndex = -1;
+        ifr.blur();
+      } catch {}
+    });
+  } catch {}
+}
+
 /**
  * Unlocks browser audio playback permission on trusted user gestures (e.g. FAB click or first tap).
  * Reuses a single shared AudioContext so repeated taps do not leak contexts.
@@ -133,16 +193,17 @@ export function deepFindMediaElements(root: Node): {
  * Forcefully applies muted or unmuted state across all media elements, shadow roots,
  * custom player elements, and iframes in a container.
  */
-export function applyAudioState(container: HTMLElement, isMuted: boolean): void {
+export function applyAudioState(container: HTMLElement, isMuted: boolean, volume = 1.0): void {
   if (!container) return;
 
+  const level = isMuted ? 0 : volume;
   const { videos, audios, players } = deepFindMediaElements(container);
 
   // 1. Unmute/mute all video elements
   for (const video of videos) {
     try {
       video.muted = isMuted;
-      video.volume = 1.0;
+      video.volume = level;
       if (!isMuted && video.paused) {
         video.play().catch(() => {});
       }
@@ -153,7 +214,7 @@ export function applyAudioState(container: HTMLElement, isMuted: boolean): void 
   for (const audio of audios) {
     try {
       audio.muted = isMuted;
-      audio.volume = 1.0;
+      audio.volume = level;
       if (!isMuted && audio.paused) {
         audio.play().catch(() => {});
       }
@@ -169,27 +230,31 @@ export function applyAudioState(container: HTMLElement, isMuted: boolean): void 
       } else {
         player.removeAttribute('muted');
         (player as any).muted = false;
-        (player as any).volume = 1.0;
+        (player as any).volume = level;
       }
     } catch {}
   }
 
-  // 4. Update iframes (e.g. RedGifs embed)
+  // 4. Update iframes (e.g. RedGifs embed).
+  // postMessage is best-effort only; src `muted=` param is the real switch.
   const iframes = container.querySelectorAll<HTMLIFrameElement>('iframe');
   for (const ifr of iframes) {
     try {
+      // Skip blanked (zero-bleed) iframes; caller restores + normalizes them.
+      if (!ifr.src || ifr.src === 'about:blank') continue;
       ifr.contentWindow?.postMessage(
         {
           action: isMuted ? 'mute' : 'unmute',
           type: isMuted ? 'mute' : 'unmute',
           muted: isMuted,
-          volume: isMuted ? 0 : 1,
+          volume: level,
         },
         '*'
       );
 
-      if (!isMuted && ifr.src && ifr.src.includes('muted=1')) {
-        ifr.src = ifr.src.replace(/muted=1/g, 'muted=0');
+      const next = normalizeIframeSrc(ifr.src, isMuted);
+      if (next !== ifr.src) {
+        ifr.src = next;
       }
     } catch {}
   }
@@ -197,12 +262,14 @@ export function applyAudioState(container: HTMLElement, isMuted: boolean): void 
 
 export class AudioManager {
   private _isMuted: boolean;
+  private _volume: number;
   private activeContainer: HTMLElement | null = null;
   private activeVideo: HTMLVideoElement | null = null;
   private videoCache = new WeakMap<HTMLElement, { video: HTMLVideoElement | null; time: number }>();
 
-  constructor(initialMuted?: boolean) {
+  constructor(initialMuted?: boolean, initialVolume?: number) {
     this._isMuted = initialMuted !== undefined ? initialMuted : getInitialMuteState();
+    this._volume = initialVolume !== undefined ? initialVolume : getInitialVolume();
   }
 
   public get isMuted(): boolean {
@@ -213,6 +280,32 @@ export class AudioManager {
     this._isMuted = value;
     persistMuteState(this._isMuted);
     this.syncActiveMute();
+  }
+
+  public get volume(): number {
+    return this._volume;
+  }
+
+  public setVolume(level: number, container?: HTMLElement): number {
+    const clamped = Math.min(1, Math.max(0, level));
+    this._volume = clamped;
+    persistVolume(clamped);
+    // Volume 0 implies muted; raising above 0 unmutes.
+    if (clamped === 0 && !this._isMuted) {
+      this._isMuted = true;
+      persistMuteState(true);
+    } else if (clamped > 0 && this._isMuted) {
+      this._isMuted = false;
+      persistMuteState(false);
+    }
+    const target = container || this.activeContainer;
+    if (target) applyAudioState(target, this._isMuted, this._volume);
+    else this.syncActiveMute();
+    return this._volume;
+  }
+
+  public adjustVolume(delta: number, container?: HTMLElement): number {
+    return this.setVolume(this._volume + delta, container);
   }
 
   public getActiveVideo(): HTMLVideoElement | null {
@@ -301,21 +394,30 @@ export class AudioManager {
       });
     }
 
-    // 3. Play active video and apply audio state
+    // 3. Play active video and apply audio state.
+    // Restore + normalize active iframe FIRST so applyAudioState targets
+    // a live embed with the correct muted= param (not about:blank).
     if (targetContainer) {
-      applyAudioState(targetContainer, this._isMuted);
-
-      // Restore active iframe if blanked
       const iframes = targetContainer.querySelectorAll<HTMLIFrameElement>('iframe');
       iframes.forEach((ifr) => {
-        if (ifr.dataset.rrSrc && ifr.src === 'about:blank') {
-          ifr.src = ifr.dataset.rrSrc;
-        }
+        try {
+          const stored = ifr.dataset.rrSrc;
+          const current = ifr.src === 'about:blank' && stored ? stored : ifr.src;
+          if (!current || current === 'about:blank') return;
+          const next = normalizeIframeSrc(current, this._isMuted);
+          if (ifr.src === 'about:blank') ifr.src = next;
+          else if (next !== ifr.src) ifr.src = next;
+          ifr.tabIndex = -1;
+        } catch {}
       });
+
+      applyAudioState(targetContainer, this._isMuted, this._volume);
+      blurIframes(targetContainer);
     }
 
     if (targetVideo) {
       targetVideo.muted = this._isMuted;
+      targetVideo.volume = this._isMuted ? 0 : this._volume;
       targetVideo.playsInline = true;
       targetVideo.play().catch((err: Error) => {
         // If unmuted autoplay blocked by browser policy without gesture, fallback to muted
@@ -373,19 +475,39 @@ export class AudioManager {
 
     const target = container || this.activeContainer;
     if (target) {
-      applyAudioState(target, this._isMuted);
+      applyAudioState(target, this._isMuted, this._volume);
     }
     this.syncActiveMute();
 
     return this._isMuted;
   }
 
+  /**
+   * After a trusted user gesture, re-assert unmuted iframe src so a
+   * first-load RedGifs embed blocked by autoplay policy can start audible.
+   */
+  public reassertActiveIframeUnmute(): void {
+    if (this._isMuted || !this.activeContainer) return;
+    try {
+      this.activeContainer.querySelectorAll<HTMLIFrameElement>('iframe').forEach((ifr) => {
+        try {
+          const stored = ifr.src === 'about:blank' ? ifr.dataset.rrSrc : ifr.src;
+          if (!stored || stored === 'about:blank') return;
+          const next = normalizeIframeSrc(stored, false);
+          if (ifr.src !== next) ifr.src = next;
+        } catch {}
+      });
+      applyAudioState(this.activeContainer, false, this._volume);
+    } catch {}
+  }
+
   private syncActiveMute(): void {
     if (this.activeContainer) {
-      applyAudioState(this.activeContainer, this._isMuted);
+      applyAudioState(this.activeContainer, this._isMuted, this._volume);
     } else if (this.activeVideo) {
       try {
         this.activeVideo.muted = this._isMuted;
+        this.activeVideo.volume = this._isMuted ? 0 : this._volume;
         if (!this._isMuted && this.activeVideo.paused) {
           this.activeVideo.play().catch(() => {});
         }

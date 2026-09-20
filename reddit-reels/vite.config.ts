@@ -14,7 +14,7 @@ export default defineConfig({
         ],
         description: 'Transform Reddit feeds into an immersive, vertical swipe Reel Mode (TikTok / Instagram Reels style). Features unmuted audio mutex with zero background bleed, smart aspect-ratio scaling (contain meme videos, cover vertical reels), double-tap fit/fill toggle, multi-image gallery carousels, text & link preview cards, subtitles/closed-captions toggle, and native Reddit vote delegation.',
         author: 'quantavil',
-        version: '1.0.0',
+        version: '1.1.0',
         license: 'MIT',
         'run-at': 'document-end',
         homepage: 'https://github.com/quantavil/userscript/tree/main/reddit-reels',

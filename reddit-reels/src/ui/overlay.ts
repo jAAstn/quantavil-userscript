@@ -15,7 +15,7 @@ export function getDownvoteIconSvg(isDownvoted: boolean): string {
   return `<svg width="26" height="26" viewBox="0 0 24 24" fill="${isDownvoted ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 }
 
-export function getCcIconSvg(enabled: boolean): string {
+export function getCcIconSvg(_enabled: boolean): string {
   return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
     <rect x="2" y="4" width="20" height="16" rx="3" ry="3"></rect>
     <path d="M7 15h0a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h1"></path>

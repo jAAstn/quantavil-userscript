@@ -1,6 +1,6 @@
 import { ReelPost } from '../extractor/types';
 import { ResolvedMedia } from './types';
-import { audioManager, AudioManager } from './audio-manager';
+import { audioManager, AudioManager, normalizeIframeSrc } from './audio-manager';
 
 export * from './types';
 export * from './audio-manager';
@@ -52,7 +52,7 @@ export function resolveMedia(post: ReelPost): ResolvedMedia {
   if (iframe && iframe.src) {
     return {
       type: 'iframe',
-      src: iframe.src,
+      src: normalizeIframeSrc(iframe.src, audioManager.isMuted),
       hasAudio: true,
       element: iframe,
     };
@@ -75,7 +75,7 @@ export function resolveMedia(post: ReelPost): ResolvedMedia {
     }
     return {
       type: 'iframe',
-      src: `https://www.redgifs.com/ifr/${match[1]}?autoplay=1&muted=0`,
+      src: normalizeIframeSrc(`https://www.redgifs.com/ifr/${match[1]}?autoplay=1&muted=0`, audioManager.isMuted),
       hasAudio: true,
     };
   }

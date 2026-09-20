@@ -15,7 +15,8 @@ An immersive, high-performance Userscript for **Tampermonkey** and **Violentmonk
 - **The Solution**: 
   - Audio starts **unmuted by default**.
   - A strict **Single-Media Focus Mutex** (`AudioManager`) ensures that navigating to any post immediately pauses, mutes, and resets all previous media elements and iframes. Exactly one audio stream is active at any time.
-  - Global sound state persists seamlessly across sessions.
+  - RedGifs/Streamable embeds unmute via the `muted=0/1` src param (these players ignore generic postMessage mute), normalized both directions and re-asserted after the first tap/keypress that unlocks autoplay.
+  - Global sound and volume state persists seamlessly across sessions.
 
 ### 2. 📐 Smart Aspect Ratio & Containment (No Cropped Memes)
 - Vertical videos (aspect ratio `h / w >= 1.5`) scale to **full-bleed cover** (`100vw × 100dvh`).
@@ -37,11 +38,14 @@ An immersive, high-performance Userscript for **Tampermonkey** and **Violentmonk
 
 ### 6. 🎬 Native RedGifs & Streamable Video Support
 - Embedded video hosts (`redgifs.com`, `streamable.com`, `gfycat.com`) are automatically classified as video posts and mounted as full-bleed, autoplaying responsive iframes rather than static link cards.
+- Iframes stay keyboard-focus-free (`tabindex=-1` + blur) so hotkeys keep working. Volume keys unmute/mute embeds (cross-origin players expose no fine-grained volume API).
 
 ### 7. ⌨️ Desktop Keyboard Navigation
 - `J` / `ArrowDown` — Navigate to next reel
 - `K` / `ArrowUp` — Navigate to previous reel
 - `M` — Toggle mute / unmute
+- `+` / `=` or `Shift+ArrowUp` — Volume up
+- `-` / `_` or `Shift+ArrowDown` — Volume down
 - `C` — Toggle closed captions / subtitles
 - `Esc` — Exit Reel Mode back to standard Reddit
 
@@ -75,7 +79,7 @@ An immersive, high-performance Userscript for **Tampermonkey** and **Violentmonk
 
 The codebase is modularized by domain (cards, core, extractor, media, styles, ui).
 Core extraction/playback modules are intentionally larger (`dom-extractor.ts` ~650,
-`audio-manager.ts` ~430, `feed-manager.ts` ~320) because Reddit DOM parsing and the
+`audio-manager.ts` ~560, `feed-manager.ts` ~320) because Reddit DOM parsing and the
 audio mutex cannot be split without creating leaky abstractions; new UI/styles
 helpers should stay small and focused (< 150 lines where practical).
 
@@ -120,7 +124,7 @@ reddit-reels/
 │       └── index.ts
 └── tests/
     ├── fixtures/               # Mock Reddit DOM, fixture bundles & test server
-    ├── unit/                   # Fast unit tests (Bun test runner, 36 tests)
+    ├── unit/                   # Fast unit tests (Bun test runner, 38 tests)
     │   ├── extractor.test.ts   # DOM extractor & voting proxy tests
     │   ├── media.test.ts       # Audio mutex & media resolver tests
     │   └── teardown.test.ts    # Feed restoration, teardown, carousel & audit tests
@@ -142,7 +146,7 @@ reddit-reels/
 bun install
 ```
 
-### 2. Run Unit Tests (36 Tests)
+### 2. Run Unit Tests (38 Tests)
 ```bash
 bun test tests/unit
 ```

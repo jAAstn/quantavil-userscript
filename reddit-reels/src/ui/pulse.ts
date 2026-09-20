@@ -27,3 +27,16 @@ export function showScalePulse(mode: string): void {
   document.body.appendChild(pulse);
   setTimeout(() => pulse.remove(), 650);
 }
+
+export function showVolumePulse(level: number, muted: boolean): void {
+  const existing = document.querySelector('.rr-scale-pulse');
+  if (existing) existing.remove();
+
+  const pct = Math.round(level * 100);
+  const pulse = document.createElement('div');
+  pulse.className = 'rr-scale-pulse';
+  pulse.textContent = muted || pct === 0 ? 'Muted' : `Volume ${pct}%`;
+
+  document.body.appendChild(pulse);
+  setTimeout(() => pulse.remove(), 650);
+}

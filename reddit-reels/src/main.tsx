@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import './style.css';
-import { audioManager, applyAudioState, unlockAudio } from './media';
+import { audioManager, unlockAudio } from './media';
 import {
   FabButton,
   createTopBar,
@@ -26,10 +26,14 @@ function syncTopBarSound(): void {
 function handleToggleMute(): void {
   unlockAudio();
   const activePost = getClosestPostToViewport();
-  const nextMuted = audioManager.toggleMute(activePost || undefined);
-  if (activePost) {
-    applyAudioState(activePost, nextMuted);
-  }
+  audioManager.toggleMute(activePost || undefined);
+  audioManager.reassertActiveIframeUnmute();
+  syncTopBarSound();
+}
+
+function handleVolumeChange(): void {
+  // Volume state already applied by InputController via AudioManager;
+  // keep the top-bar mute icon in sync (volume 0 mutes, >0 unmutes).
   syncTopBarSound();
 }
 
@@ -42,6 +46,7 @@ const inputController = new InputController({
   getActivePost: () => getClosestPostToViewport(),
   onExit: () => toggleReelMode(false),
   onToggleMute: handleToggleMute,
+  onVolumeChange: handleVolumeChange,
   onToggleSubtitles: () => feedManager.toggleSubtitles(),
   onNextPost: () => feedManager.scrollToNext(),
   onPrevPost: () => feedManager.scrollToPrev(),

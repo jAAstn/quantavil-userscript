@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Reel Mode: Immersive Full-Screen Vertical Video & Feed Swipe
 // @namespace    https://github.com/quantavil/userscript/tree/main/reddit-reels
-// @version      1.0.0
+// @version      1.1.0
 // @author       quantavil
 // @description  Transform Reddit feeds into an immersive, vertical swipe Reel Mode (TikTok / Instagram Reels style). Features unmuted audio mutex with zero background bleed, smart aspect-ratio scaling (contain meme videos, cover vertical reels), double-tap fit/fill toggle, multi-image gallery carousels, text & link preview cards, subtitles/closed-captions toggle, and native Reddit vote delegation.
 // @license      MIT
@@ -1771,6 +1771,62 @@ html.rr-active .rr-link-card {
     } catch {
     }
   }
+  const VOLUME_KEY = "reddit_reels_volume";
+  function getInitialVolume() {
+    try {
+      if (typeof GM_getValue === "function") {
+        const gmVal = GM_getValue(VOLUME_KEY, null);
+        if (typeof gmVal === "number" && gmVal >= 0 && gmVal <= 1) return gmVal;
+      }
+    } catch {
+    }
+    try {
+      if (typeof localStorage !== "undefined") {
+        const raw = localStorage.getItem(VOLUME_KEY);
+        if (raw !== null) {
+          const n2 = parseFloat(raw);
+          if (!Number.isNaN(n2) && n2 >= 0 && n2 <= 1) return n2;
+        }
+      }
+    } catch {
+    }
+    return 1;
+  }
+  function persistVolume(volume) {
+    try {
+      if (typeof GM_setValue === "function") {
+        GM_setValue(VOLUME_KEY, volume);
+      }
+    } catch {
+    }
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(VOLUME_KEY, String(volume));
+      }
+    } catch {
+    }
+  }
+  function normalizeIframeSrc(src, isMuted) {
+    if (!src || src === "about:blank") return src;
+    const target = isMuted ? "muted=1" : "muted=0";
+    if (/[?&]muted=[01]/.test(src)) {
+      return src.replace(/([?&]muted=)[01]/g, `$1${isMuted ? "1" : "0"}`);
+    }
+    const sep = src.includes("?") ? "&" : "?";
+    return `${src}${sep}${target}`;
+  }
+  function blurIframes(container) {
+    try {
+      container.querySelectorAll("iframe").forEach((ifr) => {
+        try {
+          ifr.tabIndex = -1;
+          ifr.blur();
+        } catch {
+        }
+      });
+    } catch {
+    }
+  }
   let sharedAudioCtx = null;
   function unlockAudio() {
     try {
@@ -1820,13 +1876,14 @@ html.rr-active .rr-link-card {
     traverse(root);
     return { videos, audios, players };
   }
-  function applyAudioState(container, isMuted) {
+  function applyAudioState(container, isMuted, volume = 1) {
     if (!container) return;
+    const level = isMuted ? 0 : volume;
     const { videos, audios, players } = deepFindMediaElements(container);
     for (const video of videos) {
       try {
         video.muted = isMuted;
-        video.volume = 1;
+        video.volume = level;
         if (!isMuted && video.paused) {
           video.play().catch(() => {
           });
@@ -1837,7 +1894,7 @@ html.rr-active .rr-link-card {
     for (const audio of audios) {
       try {
         audio.muted = isMuted;
-        audio.volume = 1;
+        audio.volume = level;
         if (!isMuted && audio.paused) {
           audio.play().catch(() => {
           });
@@ -1853,7 +1910,7 @@ html.rr-active .rr-link-card {
         } else {
           player.removeAttribute("muted");
           player.muted = false;
-          player.volume = 1;
+          player.volume = level;
         }
       } catch {
       }
@@ -1861,17 +1918,19 @@ html.rr-active .rr-link-card {
     const iframes = container.querySelectorAll("iframe");
     for (const ifr of iframes) {
       try {
+        if (!ifr.src || ifr.src === "about:blank") continue;
         ifr.contentWindow?.postMessage(
           {
             action: isMuted ? "mute" : "unmute",
             type: isMuted ? "mute" : "unmute",
             muted: isMuted,
-            volume: isMuted ? 0 : 1
+            volume: level
           },
           "*"
         );
-        if (!isMuted && ifr.src && ifr.src.includes("muted=1")) {
-          ifr.src = ifr.src.replace(/muted=1/g, "muted=0");
+        const next = normalizeIframeSrc(ifr.src, isMuted);
+        if (next !== ifr.src) {
+          ifr.src = next;
         }
       } catch {
       }
@@ -1879,11 +1938,13 @@ html.rr-active .rr-link-card {
   }
   class AudioManager {
     _isMuted;
+    _volume;
     activeContainer = null;
     activeVideo = null;
     videoCache = /* @__PURE__ */ new WeakMap();
-    constructor(initialMuted) {
+    constructor(initialMuted, initialVolume) {
       this._isMuted = initialMuted !== void 0 ? initialMuted : getInitialMuteState();
+      this._volume = initialVolume !== void 0 ? initialVolume : getInitialVolume();
     }
     get isMuted() {
       return this._isMuted;
@@ -1892,6 +1953,28 @@ html.rr-active .rr-link-card {
       this._isMuted = value;
       persistMuteState(this._isMuted);
       this.syncActiveMute();
+    }
+    get volume() {
+      return this._volume;
+    }
+    setVolume(level, container) {
+      const clamped = Math.min(1, Math.max(0, level));
+      this._volume = clamped;
+      persistVolume(clamped);
+      if (clamped === 0 && !this._isMuted) {
+        this._isMuted = true;
+        persistMuteState(true);
+      } else if (clamped > 0 && this._isMuted) {
+        this._isMuted = false;
+        persistMuteState(false);
+      }
+      const target = container || this.activeContainer;
+      if (target) applyAudioState(target, this._isMuted, this._volume);
+      else this.syncActiveMute();
+      return this._volume;
+    }
+    adjustVolume(delta, container) {
+      return this.setVolume(this._volume + delta, container);
     }
     getActiveVideo() {
       return this.activeVideo;
@@ -1960,16 +2043,25 @@ html.rr-active .rr-link-card {
         });
       }
       if (targetContainer) {
-        applyAudioState(targetContainer, this._isMuted);
         const iframes = targetContainer.querySelectorAll("iframe");
         iframes.forEach((ifr) => {
-          if (ifr.dataset.rrSrc && ifr.src === "about:blank") {
-            ifr.src = ifr.dataset.rrSrc;
+          try {
+            const stored = ifr.dataset.rrSrc;
+            const current = ifr.src === "about:blank" && stored ? stored : ifr.src;
+            if (!current || current === "about:blank") return;
+            const next = normalizeIframeSrc(current, this._isMuted);
+            if (ifr.src === "about:blank") ifr.src = next;
+            else if (next !== ifr.src) ifr.src = next;
+            ifr.tabIndex = -1;
+          } catch {
           }
         });
+        applyAudioState(targetContainer, this._isMuted, this._volume);
+        blurIframes(targetContainer);
       }
       if (targetVideo) {
         targetVideo.muted = this._isMuted;
+        targetVideo.volume = this._isMuted ? 0 : this._volume;
         targetVideo.playsInline = true;
         targetVideo.play().catch((err) => {
           if (!targetVideo.muted && (err.name === "NotAllowedError" || err.name === "AbortError")) {
@@ -2018,17 +2110,38 @@ html.rr-active .rr-link-card {
       persistMuteState(this._isMuted);
       const target = container || this.activeContainer;
       if (target) {
-        applyAudioState(target, this._isMuted);
+        applyAudioState(target, this._isMuted, this._volume);
       }
       this.syncActiveMute();
       return this._isMuted;
     }
+    /**
+     * After a trusted user gesture, re-assert unmuted iframe src so a
+     * first-load RedGifs embed blocked by autoplay policy can start audible.
+     */
+    reassertActiveIframeUnmute() {
+      if (this._isMuted || !this.activeContainer) return;
+      try {
+        this.activeContainer.querySelectorAll("iframe").forEach((ifr) => {
+          try {
+            const stored = ifr.src === "about:blank" ? ifr.dataset.rrSrc : ifr.src;
+            if (!stored || stored === "about:blank") return;
+            const next = normalizeIframeSrc(stored, false);
+            if (ifr.src !== next) ifr.src = next;
+          } catch {
+          }
+        });
+        applyAudioState(this.activeContainer, false, this._volume);
+      } catch {
+      }
+    }
     syncActiveMute() {
       if (this.activeContainer) {
-        applyAudioState(this.activeContainer, this._isMuted);
+        applyAudioState(this.activeContainer, this._isMuted, this._volume);
       } else if (this.activeVideo) {
         try {
           this.activeVideo.muted = this._isMuted;
+          this.activeVideo.volume = this._isMuted ? 0 : this._volume;
           if (!this._isMuted && this.activeVideo.paused) {
             this.activeVideo.play().catch(() => {
             });
@@ -2110,7 +2223,7 @@ html.rr-active .rr-link-card {
     if (iframe && iframe.src) {
       return {
         type: "iframe",
-        src: iframe.src,
+        src: normalizeIframeSrc(iframe.src, audioManager.isMuted),
         hasAudio: true,
         element: iframe
       };
@@ -2129,7 +2242,7 @@ html.rr-active .rr-link-card {
       }
       return {
         type: "iframe",
-        src: `https://www.redgifs.com/ifr/${match[1]}?autoplay=1&muted=0`,
+        src: normalizeIframeSrc(`https://www.redgifs.com/ifr/${match[1]}?autoplay=1&muted=0`, audioManager.isMuted),
         hasAudio: true
       };
     }
@@ -2438,6 +2551,16 @@ html.rr-active .rr-link-card {
     document.body.appendChild(pulse);
     setTimeout(() => pulse.remove(), 650);
   }
+  function showVolumePulse(level, muted) {
+    const existing = document.querySelector(".rr-scale-pulse");
+    if (existing) existing.remove();
+    const pct = Math.round(level * 100);
+    const pulse = document.createElement("div");
+    pulse.className = "rr-scale-pulse";
+    pulse.textContent = muted || pct === 0 ? "Muted" : `Volume ${pct}%`;
+    document.body.appendChild(pulse);
+    setTimeout(() => pulse.remove(), 650);
+  }
   function getSoundIconSvg(isMuted) {
     return isMuted ? `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>` : `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
   }
@@ -2541,7 +2664,7 @@ html.rr-active .rr-link-card {
   function getDownvoteIconSvg(isDownvoted) {
     return `<svg width="26" height="26" viewBox="0 0 24 24" fill="${isDownvoted ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
   }
-  function getCcIconSvg(enabled) {
+  function getCcIconSvg(_enabled) {
     return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
     <rect x="2" y="4" width="20" height="16" rx="3" ry="3"></rect>
     <path d="M7 15h0a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h1"></path>
@@ -3024,6 +3147,7 @@ html.rr-active .rr-link-card {
     delete postEl.dataset.rrCaptions;
   }
   const POST_SELECTORS = 'shreddit-post, article, [data-testid="post-container"], .Post';
+  const VOLUME_STEP = 0.1;
   class InputController {
     options;
     lastTapTimestamp = 0;
@@ -3041,7 +3165,7 @@ html.rr-active .rr-link-card {
       }
       if (!this.keydownListener) {
         this.keydownListener = (e2) => this.handleKeyDown(e2);
-        window.addEventListener("keydown", this.keydownListener);
+        window.addEventListener("keydown", this.keydownListener, true);
       }
     }
     detach() {
@@ -3050,7 +3174,7 @@ html.rr-active .rr-link-card {
         this.clickListener = null;
       }
       if (this.keydownListener) {
-        window.removeEventListener("keydown", this.keydownListener);
+        window.removeEventListener("keydown", this.keydownListener, true);
         this.keydownListener = null;
       }
       this.lastTapTimestamp = 0;
@@ -3066,14 +3190,14 @@ html.rr-active .rr-link-card {
       if (video) {
         const wasPaused = video.paused;
         if (wasPaused) {
-          applyAudioState(post, audioManager.isMuted);
+          applyAudioState(post, audioManager.isMuted, audioManager.volume);
           video.play().catch(() => {
           });
         } else {
           video.pause();
         }
         showPlayPulse(wasPaused);
-      }
+      } else if (post.querySelector("iframe")) ;
     }
     handleTap(e2) {
       if (!this.options.isReelModeActive()) return;
@@ -3086,6 +3210,7 @@ html.rr-active .rr-link-card {
       const post = target.closest(POST_SELECTORS);
       if (!post) return;
       unlockAudio();
+      audioManager.reassertActiveIframeUnmute();
       const now = Date.now();
       if (now - this.lastTapTimestamp < 320 && this.lastTapPost === post) {
         if (this.singleTapTimer) {
@@ -3118,17 +3243,35 @@ html.rr-active .rr-link-card {
     }
     handleKeyDown(e2) {
       if (!this.options.isReelModeActive()) return;
+      const target = e2.target;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (e2.key === "Escape") {
         this.options.onExit();
       } else if (e2.key === "m" || e2.key === "M") {
         this.options.onToggleMute();
+      } else if (e2.key === "+" || e2.key === "=" || e2.shiftKey && e2.key === "ArrowUp") {
+        e2.preventDefault();
+        this.changeVolume(VOLUME_STEP);
+      } else if (e2.key === "-" || e2.key === "_" || e2.shiftKey && e2.key === "ArrowDown") {
+        e2.preventDefault();
+        this.changeVolume(-VOLUME_STEP);
       } else if (e2.key === "c" || e2.key === "C") {
         this.options.onToggleSubtitles?.();
-      } else if (e2.key === "j" || e2.key === "J" || e2.key === "ArrowDown") {
+      } else if (e2.key === "j" || e2.key === "J" || !e2.shiftKey && e2.key === "ArrowDown") {
+        e2.preventDefault();
         this.options.onNextPost?.();
-      } else if (e2.key === "k" || e2.key === "K" || e2.key === "ArrowUp") {
+      } else if (e2.key === "k" || e2.key === "K" || !e2.shiftKey && e2.key === "ArrowUp") {
+        e2.preventDefault();
         this.options.onPrevPost?.();
       }
+    }
+    changeVolume(delta) {
+      unlockAudio();
+      const post = this.options.getActivePost();
+      const level = audioManager.adjustVolume(delta, post || void 0);
+      audioManager.reassertActiveIframeUnmute();
+      showVolumePulse(level, audioManager.isMuted);
+      this.options.onVolumeChange?.(level, audioManager.isMuted);
     }
   }
   function renderTextCard(postEl, post) {
@@ -3412,22 +3555,19 @@ html.rr-active .rr-link-card {
           if (media.type === "iframe" && media.src) {
             const container = postEl.querySelector('[slot="post-media-container"]') || postEl.querySelector(".media-container") || postEl;
             const iframe = document.createElement("iframe");
-            let src = media.src;
-            try {
-              if (audioManager.isMuted && /muted=0/.test(src)) {
-                src = src.replace(/muted=0/g, "muted=1");
-              } else if (!audioManager.isMuted && /muted=1/.test(src)) {
-                src = src.replace(/muted=1/g, "muted=0");
-              }
-            } catch {
-            }
+            const src = normalizeIframeSrc(media.src, audioManager.isMuted);
             iframe.src = src;
             iframe.className = "rr-embedded-iframe";
+            iframe.tabIndex = -1;
             iframe.setAttribute("loading", "eager");
             iframe.setAttribute("frameborder", "0");
             iframe.setAttribute("allowfullscreen", "true");
             iframe.setAttribute("allow", "autoplay; fullscreen; encrypted-media; picture-in-picture");
             container.appendChild(iframe);
+            try {
+              iframe.blur();
+            } catch {
+            }
             audioManager.invalidateVideoCache(postEl);
           }
         }
@@ -3630,10 +3770,11 @@ html.rr-active .rr-link-card {
   function handleToggleMute() {
     unlockAudio();
     const activePost = getClosestPostToViewport();
-    const nextMuted = audioManager.toggleMute(activePost || void 0);
-    if (activePost) {
-      applyAudioState(activePost, nextMuted);
-    }
+    audioManager.toggleMute(activePost || void 0);
+    audioManager.reassertActiveIframeUnmute();
+    syncTopBarSound();
+  }
+  function handleVolumeChange() {
     syncTopBarSound();
   }
   const feedManager = new FeedManager({
@@ -3644,6 +3785,7 @@ html.rr-active .rr-link-card {
     getActivePost: () => getClosestPostToViewport(),
     onExit: () => toggleReelMode(false),
     onToggleMute: handleToggleMute,
+    onVolumeChange: handleVolumeChange,
     onToggleSubtitles: () => feedManager.toggleSubtitles(),
     onNextPost: () => feedManager.scrollToNext(),
     onPrevPost: () => feedManager.scrollToPrev()
