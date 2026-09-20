@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Reddit Reel Mode: Immersive Full-Screen Vertical Video & Feed Swipe
+// @name         Reddit Reels
 // @namespace    https://github.com/quantavil/userscript/tree/main/reddit-reels
 // @version      1.1.0
 // @author       quantavil
-// @description  Transform Reddit feeds into an immersive, vertical swipe Reel Mode (TikTok / Instagram Reels style). Features unmuted audio mutex with zero background bleed, smart aspect-ratio scaling (contain meme videos, cover vertical reels), double-tap fit/fill toggle, multi-image gallery carousels, text & link preview cards, subtitles/closed-captions toggle, and native Reddit vote delegation.
+// @description  Swipe Reddit feeds like reels: unmuted playback, galleries, and native voting.
 // @license      MIT
 // @homepage     https://github.com/quantavil/userscript/tree/main/reddit-reels
 // @supportURL   https://github.com/quantavil/userscript/issues
@@ -1958,7 +1958,7 @@ html.rr-active .rr-link-card {
       return this._volume;
     }
     setVolume(level, container) {
-      const clamped = Math.min(1, Math.max(0, level));
+      const clamped = Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 1;
       this._volume = clamped;
       persistVolume(clamped);
       if (clamped === 0 && !this._isMuted) {
@@ -1970,7 +1970,7 @@ html.rr-active .rr-link-card {
       }
       const target = container || this.activeContainer;
       if (target) applyAudioState(target, this._isMuted, this._volume);
-      else this.syncActiveMute();
+      this.syncActiveMute();
       return this._volume;
     }
     adjustVolume(delta, container) {

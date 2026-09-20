@@ -1,7 +1,7 @@
 {
   "name": "reddit-reels",
   "version": "1.1.0",
-  "description": "Transform Reddit feeds into an immersive, vertical swipe Reel Mode (TikTok / Instagram Reels style). Features unmuted audio mutex with zero background bleed, smart aspect-ratio scaling, gallery carousels, and native vote synchronization.",
+  "description": "Swipe Reddit feeds like reels: unmuted playback, galleries, and native voting.",
   "author": "quantavil",
   "license": "MIT",
   "private": true,

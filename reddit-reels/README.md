@@ -1,4 +1,4 @@
-# 📱 Reddit Reel Mode
+# 📱 Reddit Reels
 
 [![GitHub](https://img.shields.io/badge/GitHub-quantavil%2Fuserscript-181717?logo=github&logoColor=white)](https://github.com/quantavil/userscript)
 [![Runtime: Bun](https://img.shields.io/badge/Runtime-Bun-f472b6?logo=bun&logoColor=white)](https://bun.sh/)

@@ -287,7 +287,7 @@ export class AudioManager {
   }
 
   public setVolume(level: number, container?: HTMLElement): number {
-    const clamped = Math.min(1, Math.max(0, level));
+    const clamped = Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 1;
     this._volume = clamped;
     persistVolume(clamped);
     // Volume 0 implies muted; raising above 0 unmutes.
@@ -300,7 +300,7 @@ export class AudioManager {
     }
     const target = container || this.activeContainer;
     if (target) applyAudioState(target, this._isMuted, this._volume);
-    else this.syncActiveMute();
+    this.syncActiveMute();
     return this._volume;
   }
 
