@@ -36,7 +36,7 @@ src/
 │   ├── components/         # Reusable widgets (Switch, Stepper, ProgressBar)
 │   ├── panels/             # Panel cards (SpeedStepper, SettingsSheet)
 │   └── styles/
-│       └── css.ts          # Token system + the four themes, injected as one stylesheet
+│       └── css.ts          # Token system + the five themes, injected as one stylesheet
 └── video/
     ├── VideoAdapter.ts     # Site-specific video filtering (Generic + YouTube adapters)
     ├── VideoTracker.ts     # Mutation/Shadow DOM active video detection
@@ -52,7 +52,7 @@ extension/                  # Static MV3 assets copied verbatim into dist-extens
 - **Pub/Sub decoupling**: Components and views emit events on the `EventBus` to prevent tight cross-linking.
 - **Self-contained Panel Views**: UI panels manage their own local gestures/listeners (e.g. spaced speed stepper, settings button).
 - **CSS Injection**: Styles are written as template literal CSS in `src/ui/styles/css.ts` and loaded dynamically.
-- **Themes are token blocks, nothing else**: Every visual value is a `--mvc-*` custom property; components read tokens and never reference a theme selector. A theme is ~30 lines of tokens. `applyTheme()` sets `data-mvc-theme` on `<html>` — the one ancestor shared by the overlays, which are scattered across `document.body` and the fullscreen element. Adding a theme is a token block plus an entry in `MVC_THEMES`. Two tokens are especially powerful: `--mvc-ticks` is a whole **background-image** slot (Frame's frame ticks), and `--mvc-glyph-shadow` is a whole **filter** chain over the entire top bar *including the scrubber*.
+- **Themes are token blocks, nothing else**: Every visual value is a `--mvc-*` custom property; components read tokens and never reference a theme selector. A theme is ~35 lines of tokens. `applyTheme()` sets `data-mvc-theme` on `<html>` — the one ancestor shared by the overlays, which are scattered across `document.body` and the fullscreen element. Adding a theme is a token block plus an entry in `MVC_THEMES`. Three tokens are especially powerful: `--mvc-ticks` is a whole **background-image** slot (Frame's frame ticks), `--mvc-glyph-shadow` is a whole **filter** chain over the entire top bar *including the scrubber*, and `--mvc-fab-r` gives the speed button a per-theme silhouette (squared, sharp, squircle, blob, circle) through the single `.mvc-speed-fab` rule.
 - **Single Source of Version**: Version and description are loaded dynamically from `package.json` inside `vite.config.ts` to prevent DRY violations.
 
 ## Dependencies & Setup
@@ -67,7 +67,7 @@ extension/                  # Static MV3 assets copied verbatim into dist-extens
   - `bun run tsc` - Run TypeScript compiler checks
   - `bun run test` - Run Vitest regression tests
 
-- **No theme may set `--mvc-blur`.** All three ship it as `none`, and that is a performance decision, not an aesthetic one: a `backdrop-filter` forces a readback of a surface that repaints every frame, which is the one thing that reliably costs frames on mobile. A theme wanting a tint should reach for surface colour, not the backdrop. The token stays wired into the eight rules that read it so the option remains available if a future theme has a case for it.
+- **Blur is opt-in per theme, and it costs frames.** High Contrast and Frame ship `--mvc-blur: none`: a `backdrop-filter` forces a readback of a surface that repaints every frame, which is the one thing that reliably costs frames on mobile. Ember, Abyss, and Volt set it deliberately for the frosted look. A new theme wanting translucency should copy their `surface + blur + shadow` trio, not invent a fourth mechanism.
 
 ## Critical Information
 - **Target Video Selection**: Avoids injecting on small, muted, or preview videos (thresholds live in `config.ts`: `SMALL_MUTED_VIDEO_HEIGHT`, `LINKED_VIDEO_MIN_WIDTH/HEIGHT` for videos nested in anchors `<a>`).

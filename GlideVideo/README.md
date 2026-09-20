@@ -34,7 +34,7 @@ It asks for two permissions and no more: **storage** for your settings, and **ac
 
 ## Themes
 
-Three overlay themes, each answering the same question a different way — *how do controls stay readable over footage you don't control?* All draw **zero blurred layers**, which is what actually costs frames on mobile: every `backdrop-filter` forces a readback of a video surface that repaints every frame.
+Five overlay themes, each answering the same question a different way — *how do controls stay readable over footage you don't control?* **High Contrast** and **Frame** draw zero blurred layers: every `backdrop-filter` forces a readback of a video surface that repaints every frame, which is what actually costs frames on mobile. **Ember**, **Abyss**, and **Volt** accept that cost for a frosted/translucent look — pick them when you value feel over battery.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/quantavil/userscript/main/GlideVideo/asset/theme-high-contrast.jpg" width="49%" alt="High Contrast theme" />
@@ -42,13 +42,15 @@ Three overlay themes, each answering the same question a different way — *how 
   <img src="https://raw.githubusercontent.com/quantavil/userscript/main/GlideVideo/asset/theme-frame.jpg" width="49%" alt="Frame theme" />
 </p>
 
-**High Contrast** · default — amber on near-opaque black; the only theme fully readable in direct sunlight or on a washed-out panel.
+**High Contrast** · default — amber on near-opaque black; the only theme fully readable in direct sunlight or on a washed-out panel. Squared speed button.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/quantavil/userscript/main/GlideVideo/asset/theme-halo.jpg" width="100%" alt="Halo theme with the settings sheet open" />
-</p>
+**Frame** — hairline corner brackets, a 1px scrub line with frame ticks, one red playhead. The brackets fade with the rest of the controls, so nothing sits on the picture while you watch. Sharp-edged speed button.
 
-**Halo** — nothing over the picture but the controls, each wearing a tight dark outline. It's the trick broadcast subtitles have used for decades, and it never tints the frame. &nbsp;·&nbsp; **Frame** — Halo's mechanism with a point of view: hairline corner brackets, a 1px scrub line with frame ticks, one red playhead. The brackets fade with the rest of the controls, so nothing sits on the picture while you watch.
+**Ember** — warm-night cinema: bark-brown translucent surfaces with backdrop blur and an ember-orange glow. Squircle speed button.
+
+**Abyss** — Ember's cold counterpart: deep-teal translucent surfaces with an ice-mint accent. Wavy-blob speed button.
+
+**Volt** — brutalist signal: acid lime on near-black olive, monospace type, chunky 6px rail. Circular speed button.
 
 ---
 
@@ -80,7 +82,7 @@ In portrait, vertical swipes are handed back to the page so feeds still scroll. 
 | **Picture-in-Picture** | Where the browser supports it |
 | **Settings** | Below |
 
-Prefer something smaller? **Minimal Speed FAB** swaps the speed pill for a single circular badge that cycles 0.5× → 2.0× on tap.
+Prefer something smaller? **Minimal Speed FAB** swaps the speed pill for a single compact badge that cycles 0.5× → 2.0× on tap. It takes the active theme's button shape.
 
 ---
 
@@ -88,7 +90,7 @@ Prefer something smaller? **Minimal Speed FAB** swaps the speed pill for a singl
 
 | | |
 |---|---|
-| **Theme** | High Contrast (default), Halo, or Frame |
+| **Theme** | High Contrast (default), Frame, Ember, Abyss, or Volt |
 | **Rotate** | 0° / 90° / 180° / 270°, also on a long-press of the aspect-ratio button |
 | **Default speed** | Fallback speed for new videos |
 | **Skip duration** | Seconds per double-tap skip, 5–300 |

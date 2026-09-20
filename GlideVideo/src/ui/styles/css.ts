@@ -7,38 +7,40 @@
  * fullscreen element, so <html> is the one ancestor all of them share.
  */
 const THEMES = `
-        /* ── HALO ──────────────────────────────────────────────────────
-           No surfaces at all. Each glyph carries its own dark outline —
-           the subtitle solution. Nothing is drawn over the picture. */
-        :root[data-mvc-theme="halo"] {
+        /* ── EMBER ─────────────────────────────────────────────────────
+           Warm-night cinema: bark translucent, ember glow. The speed FAB
+           is a squircle (38% radius on a square box reads as a
+           superellipse); everything else stays pill/carded. */
+        :root[data-mvc-theme="ember"] {
             --mvc-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-            --mvc-surface: transparent;
-            --mvc-sheet: rgba(14, 15, 18, 0.94);
-            --mvc-toast: rgba(14, 15, 18, 0.9);
-            --mvc-border: 0;
-            --mvc-text: #ffffff;
-            --mvc-dim: rgba(255, 255, 255, 0.72);
-            --mvc-accent: #ffffff;
-            --mvc-fill: #ffffff;
-            --mvc-on-accent: #0e0f12;
+            --mvc-surface: rgba(32, 20, 16, 0.62);
+            --mvc-sheet: rgba(26, 16, 13, 0.82);
+            --mvc-toast: rgba(26, 16, 13, 0.9);
+            --mvc-border: 1px solid rgba(255, 171, 133, 0.22);
+            --mvc-text: #f9ece2;
+            --mvc-dim: rgba(249, 236, 226, 0.6);
+            --mvc-accent: #ff6b3d;
+            --mvc-fill: #ff6b3d;
+            --mvc-on-accent: #2a0f04;
             --mvc-r-pill: 999px;
-            --mvc-r-card: 16px;
+            --mvc-r-card: 14px;
             --mvc-r-sm: 8px;
-            --mvc-blur: none;
-            --mvc-shadow: none;
-            --mvc-glow: none;
-            --mvc-track: rgba(255, 255, 255, 0.42);
-            --mvc-buffer: rgba(255, 255, 255, 0.6);
-            --mvc-btn-on: rgba(255, 255, 255, 0.2);
-            --mvc-switch-on: #ffffff;
-            --mvc-switch-off: rgba(255, 255, 255, 0.42);
-            --mvc-thumb: #ffffff;
+            --mvc-fab-r: 38%;
+            --mvc-blur: blur(14px) saturate(1.25);
+            --mvc-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+            --mvc-glow: 0 0 12px rgba(255, 107, 61, 0.35);
+            --mvc-track: rgba(249, 236, 226, 0.28);
+            --mvc-buffer: rgba(249, 236, 226, 0.45);
+            --mvc-btn-on: rgba(255, 107, 61, 0.22);
+            --mvc-switch-on: #ff6b3d;
+            --mvc-switch-off: rgba(249, 236, 226, 0.28);
+            --mvc-thumb: #ff6b3d;
             --mvc-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
             --mvc-dur: 0.2s;
-            --mvc-glyph-shadow: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 5px rgba(0, 0, 0, 0.7));
+            --mvc-glyph-shadow: none;
             --mvc-frame: transparent;
             --mvc-ticks: none;
-            --mvc-track-h: 3px;
+            --mvc-track-h: 5px;
         }
 
         /* ── HIGH CONTRAST (default) ───────────────────────────────────
@@ -59,6 +61,7 @@ const THEMES = `
             --mvc-r-pill: 4px;
             --mvc-r-card: 6px;
             --mvc-r-sm: 2px;
+            --mvc-fab-r: 4px;
             --mvc-blur: none;
             --mvc-shadow: none;
             --mvc-glow: none;
@@ -93,6 +96,7 @@ const THEMES = `
             --mvc-r-pill: 0px;
             --mvc-r-card: 0px;
             --mvc-r-sm: 0px;
+            --mvc-fab-r: 0px;
             --mvc-blur: none;
             --mvc-shadow: none;
             --mvc-glow: none;
@@ -108,6 +112,77 @@ const THEMES = `
             --mvc-frame: rgba(242, 240, 236, 0.42);
             --mvc-ticks: repeating-linear-gradient(to right, rgba(242, 240, 236, 0.5) 0 1px, transparent 1px 100%);
             --mvc-track-h: 1px;
+        }
+
+        /* ── ABYSS ─────────────────────────────────────────────────────
+           Cold counterpart to Ember: deep-teal translucent, ice-mint
+           accent. The speed FAB is a wavy blob — one asymmetric
+           border-radius, zero extra paint cost. */
+        :root[data-mvc-theme="abyss"] {
+            --mvc-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            --mvc-surface: rgba(10, 28, 34, 0.6);
+            --mvc-sheet: rgba(7, 22, 27, 0.82);
+            --mvc-toast: rgba(7, 22, 27, 0.9);
+            --mvc-border: 1px solid rgba(94, 234, 212, 0.2);
+            --mvc-text: #e4f4f0;
+            --mvc-dim: rgba(228, 244, 240, 0.58);
+            --mvc-accent: #5eead4;
+            --mvc-fill: #5eead4;
+            --mvc-on-accent: #03211c;
+            --mvc-r-pill: 10px;
+            --mvc-r-card: 10px;
+            --mvc-r-sm: 6px;
+            --mvc-fab-r: 58% 42% 55% 45% / 45% 55% 42% 58%;
+            --mvc-blur: blur(14px) saturate(1.25);
+            --mvc-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+            --mvc-glow: 0 0 12px rgba(94, 234, 212, 0.28);
+            --mvc-track: rgba(228, 244, 240, 0.28);
+            --mvc-buffer: rgba(228, 244, 240, 0.45);
+            --mvc-btn-on: rgba(94, 234, 212, 0.2);
+            --mvc-switch-on: #5eead4;
+            --mvc-switch-off: rgba(228, 244, 240, 0.28);
+            --mvc-thumb: #5eead4;
+            --mvc-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+            --mvc-dur: 0.2s;
+            --mvc-glyph-shadow: none;
+            --mvc-frame: transparent;
+            --mvc-ticks: none;
+            --mvc-track-h: 5px;
+        }
+
+        /* ── VOLT ──────────────────────────────────────────────────────
+           Brutalist signal: acid lime on near-black olive, mono type,
+           chunky 6px rail. The speed FAB is the only full circle. */
+        :root[data-mvc-theme="volt"] {
+            --mvc-font: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            --mvc-surface: rgba(18, 20, 8, 0.72);
+            --mvc-sheet: rgba(14, 16, 6, 0.86);
+            --mvc-toast: rgba(14, 16, 6, 0.92);
+            --mvc-border: 1px solid rgba(217, 242, 79, 0.24);
+            --mvc-text: #f2f5df;
+            --mvc-dim: rgba(242, 245, 223, 0.58);
+            --mvc-accent: #d9f24f;
+            --mvc-fill: #d9f24f;
+            --mvc-on-accent: #1c2004;
+            --mvc-r-pill: 999px;
+            --mvc-r-card: 16px;
+            --mvc-r-sm: 8px;
+            --mvc-fab-r: 999px;
+            --mvc-blur: blur(12px);
+            --mvc-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+            --mvc-glow: 0 0 14px rgba(217, 242, 79, 0.3);
+            --mvc-track: rgba(242, 245, 223, 0.28);
+            --mvc-buffer: rgba(242, 245, 223, 0.45);
+            --mvc-btn-on: rgba(217, 242, 79, 0.2);
+            --mvc-switch-on: #d9f24f;
+            --mvc-switch-off: rgba(242, 245, 223, 0.28);
+            --mvc-thumb: #d9f24f;
+            --mvc-ease: linear;
+            --mvc-dur: 0.1s;
+            --mvc-glyph-shadow: none;
+            --mvc-frame: transparent;
+            --mvc-ticks: none;
+            --mvc-track-h: 6px;
         }
 `;
 
@@ -201,7 +276,10 @@ ${THEMES}
             position: relative;
             width: 36px;
             height: 36px;
-            border-radius: var(--mvc-r-pill);
+            /* Per-theme FAB silhouette: one token, zero extra selectors.
+               contrast 4px squared · frame 0 sharp · ember 38% squircle ·
+               abyss blob · volt 999px circle. Falls back to pill. */
+            border-radius: var(--mvc-fab-r, var(--mvc-r-pill));
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1068,12 +1146,14 @@ ${THEMES}
 	document.head.appendChild(style);
 }
 
-export const MVC_THEMES = ["contrast", "halo", "frame"] as const;
+export const MVC_THEMES = ["contrast", "frame", "ember", "abyss", "volt"] as const;
 export type MvcTheme = (typeof MVC_THEMES)[number];
 export const MVC_THEME_LABELS: Record<MvcTheme, string> = {
 	contrast: "High Contrast",
-	halo: "Halo",
 	frame: "Frame",
+	ember: "Ember",
+	abyss: "Abyss",
+	volt: "Volt",
 };
 
 export function applyTheme(theme: string): void {

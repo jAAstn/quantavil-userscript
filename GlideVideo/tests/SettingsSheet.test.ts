@@ -89,13 +89,17 @@ describe("SettingsSheet", () => {
 
 		expect(val.textContent).toBe("High Contrast");
 		inc.click();
-		expect(store.settings.theme).toBe("halo");
-		inc.click();
 		expect(store.settings.theme).toBe("frame");
+		inc.click();
+		expect(store.settings.theme).toBe("ember");
+		inc.click();
+		expect(store.settings.theme).toBe("abyss");
+		inc.click();
+		expect(store.settings.theme).toBe("volt");
 		inc.click();
 		expect(store.settings.theme).toBe("contrast"); // wraps forward
 		dec.click();
-		expect(store.settings.theme).toBe("frame"); // wraps backward
+		expect(store.settings.theme).toBe("volt"); // wraps backward
 	});
 
 	it("theme stepper handles invalid theme safely and falls back to High Contrast label", () => {
@@ -108,7 +112,7 @@ describe("SettingsSheet", () => {
 
 		const inc = themeRow.querySelectorAll(".mvc-stepper-btn")[1] as HTMLElement;
 		inc.click();
-		expect(store.settings.theme).toBe("halo");
+		expect(store.settings.theme).toBe("frame");
 	});
 
 	it("should provide switch role, aria-checked, keyboard toggle, and label association", () => {

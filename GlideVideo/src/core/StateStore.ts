@@ -229,8 +229,10 @@ export class StateStore {
 		}
 
 		const rawTheme = this.storageGet(this.getStorageKey("theme"), "contrast");
-		const theme = (MVC_THEMES as readonly string[]).includes(rawTheme)
-			? rawTheme
+		// "halo" was removed (replaced by ember/abyss/volt) — migrate survivors.
+		const migratedTheme = rawTheme === "halo" ? "ember" : rawTheme;
+		const theme = (MVC_THEMES as readonly string[]).includes(migratedTheme)
+			? migratedTheme
 			: "contrast";
 
 		this.settings = {
