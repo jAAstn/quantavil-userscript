@@ -270,6 +270,15 @@ ins.adsbyjuicy,
   transform: rotate(-90deg) !important;
 }
 
+/* Collapsed state (wired by nativefilter.ts): hide the body, flatten toggle */
+.filters-panel.br34-collapsed .filters-panel__body {
+  display: none !important;
+}
+
+.filters-panel__toggle[aria-expanded="false"] {
+  border-bottom: none !important;
+}
+
 .filters-panel__body {
   padding: 14px 16px !important;
   display: flex !important;

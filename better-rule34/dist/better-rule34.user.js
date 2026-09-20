@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Rule34Video
 // @namespace    https://github.com/quantavil/userscript/
-// @version      1.3.0
+// @version      1.4.0
 // @author       quantavil
 // @description  Streamlined filter bar, instant client search & filtering, ad cleaner, and seamless auto next page infinite scroll for Rule34Video.
 // @license      MIT
@@ -12,991 +12,925 @@
 // @run-at       document-end
 // ==/UserScript==
 
-(function () {
-  'use strict';
-
-  var __defProp = Object.defineProperty;
-  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-  const BASE_YEAR = 2018;
-  const DEFAULT_FILTER = {
-    query: "",
-    soundOnly: false,
-    hdOnly: false,
-    futaFilter: "all",
-    hideWatched: false,
-    minRating: 0,
-    minViews: 0,
-    minYear: BASE_YEAR,
-    durationMinSeconds: null
-  };
-  function parseDuration(timeStr) {
-    if (!timeStr) return 0;
-    const cleaned = timeStr.trim().replace(/[^\d:]/g, "");
-    if (!cleaned) return 0;
-    const parts = cleaned.split(":").map((p) => parseInt(p, 10));
-    if (parts.some(isNaN)) return 0;
-    if (parts.length === 1) return parts[0];
-    if (parts.length === 2) return parts[0] * 60 + parts[1];
-    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    return 0;
-  }
-  function parseViews(viewStr) {
-    var _a;
-    if (!viewStr) return 0;
-    const match = /([\d.]+)\s*([KkMmBb])?/.exec(viewStr.replace(/,/g, "").trim());
-    if (!match) return 0;
-    const num = parseFloat(match[1]);
-    if (isNaN(num)) return 0;
-    const unit = (_a = match[2]) == null ? void 0 : _a.toUpperCase();
-    if (unit === "K") return Math.round(num * 1e3);
-    if (unit === "M") return Math.round(num * 1e6);
-    if (unit === "B") return Math.round(num * 1e9);
-    return Math.round(num);
-  }
-  function parseRating(ratingStr) {
-    if (!ratingStr) return { percent: 0, count: 0 };
-    const percentMatch = /(\d+)%/.exec(ratingStr);
-    const countMatch = /\(([\d,]+)\)/.exec(ratingStr);
-    const percent = percentMatch ? parseInt(percentMatch[1], 10) : 0;
-    const count = countMatch ? parseInt(countMatch[1].replace(/,/g, ""), 10) : 0;
-    return { percent, count };
-  }
-  function parseSubmittedYear(dateStr, currentYear = (/* @__PURE__ */ new Date()).getFullYear()) {
-    if (!dateStr) return currentYear;
-    const text = dateStr.toLowerCase().trim();
-    const explicitYearMatch = /\b(20[12]\d)\b/.exec(text);
-    if (explicitYearMatch) {
-      return parseInt(explicitYearMatch[1], 10);
-    }
-    const yearsAgoMatch = /(\d+)\s+years?\s+ago/.exec(text);
-    if (yearsAgoMatch) {
-      const diff = parseInt(yearsAgoMatch[1], 10);
-      return Math.max(BASE_YEAR, currentYear - diff);
-    }
-    const monthsAgoMatch = /(\d+)\s+months?\s+ago/.exec(text);
-    if (monthsAgoMatch) {
-      const months = parseInt(monthsAgoMatch[1], 10);
-      const d = /* @__PURE__ */ new Date();
-      d.setMonth(d.getMonth() - months);
-      return d.getFullYear();
-    }
-    return currentYear;
-  }
-  function isAdCard(el) {
-    if (el.classList.contains("spot-thumb") || el.closest(".spots")) return true;
-    if (el.querySelector("iframe")) return true;
-    const header = el.querySelector("header");
-    if (header && /AD/i.test(header.textContent ?? "")) return true;
-    const link = el.querySelector("a.th, a");
-    if (link) {
-      const href = link.getAttribute("href") || "";
-      if (href.includes("/v1/d.php") || href.includes("sadbaguette") || href.includes("ku34bh9la09")) {
-        return true;
-      }
-    }
-    const hasVideoCardId = Boolean(el.dataset.videoCardId);
-    const hasVideoHref = Boolean(el.querySelector('a[href*="/video/"]'));
-    return !hasVideoCardId && !hasVideoHref;
-  }
-  function extractCardData(el) {
-    var _a, _b, _c, _d, _e, _f;
-    if (isAdCard(el)) return null;
-    const cardLink = el.querySelector('a.th, a[href*="/video/"]');
-    const href = (cardLink == null ? void 0 : cardLink.getAttribute("href")) || "";
-    const idMatch = /video\/(\d+)/.exec(href);
-    const id = el.dataset.videoCardId || (idMatch == null ? void 0 : idMatch[1]) || "";
-    if (!id || !href) return null;
-    const titleEl = el.querySelector(".thumb_title");
-    const title = ((_a = titleEl == null ? void 0 : titleEl.textContent) == null ? void 0 : _a.trim()) || ((_b = cardLink == null ? void 0 : cardLink.getAttribute("title")) == null ? void 0 : _b.trim()) || "";
-    const imgEl = el.querySelector("img.thumb, img");
-    const thumbUrl = (imgEl == null ? void 0 : imgEl.dataset.webp) || (imgEl == null ? void 0 : imgEl.dataset.original) || (imgEl == null ? void 0 : imgEl.getAttribute("data-webp")) || (imgEl == null ? void 0 : imgEl.getAttribute("data-original")) || (imgEl == null ? void 0 : imgEl.src) || "";
-    const previewWrap = el.querySelector(".wrap_image");
-    const previewUrl = (previewWrap == null ? void 0 : previewWrap.dataset.preview) || (previewWrap == null ? void 0 : previewWrap.getAttribute("data-preview")) || null;
-    const timeEl = el.querySelector(".time");
-    const durationFormatted = ((_c = timeEl == null ? void 0 : timeEl.textContent) == null ? void 0 : _c.trim()) || "";
-    const durationSeconds = parseDuration(durationFormatted);
-    const ratingEl = el.querySelector(".video-card-meta__rating") || el.querySelector(".rating");
-    const { percent: ratingPercent, count: votesCount } = parseRating((ratingEl == null ? void 0 : ratingEl.textContent) ?? "");
-    const viewsEl = el.querySelector(".video-views-count") || el.querySelector(".views");
-    const viewsFormatted = ((_d = viewsEl == null ? void 0 : viewsEl.textContent) == null ? void 0 : _d.trim()) || "";
-    const viewsCount = parseViews(viewsFormatted);
-    const commentsEl = el.querySelector(".video-comments-count");
-    const commentsCount = parseInt(((_e = commentsEl == null ? void 0 : commentsEl.textContent) == null ? void 0 : _e.trim()) || "0", 10) || 0;
-    const hasSound = el.querySelector(".sound") !== null;
-    const isHd = el.querySelector(".quality") !== null || el.querySelector(".custom-hd") !== null;
-    const isFuta = el.querySelector(".futa") !== null;
-    const isWatched = (previewWrap == null ? void 0 : previewWrap.classList.contains("watched")) || el.classList.contains("watched") || Boolean(el.querySelector(".watched"));
-    const dateEl = el.querySelector(".video-card-meta__date") || el.querySelector(".added");
-    const submittedAgo = (dateEl == null ? void 0 : dateEl.getAttribute("title")) || ((_f = dateEl == null ? void 0 : dateEl.textContent) == null ? void 0 : _f.trim()) || "";
-    const submittedYear = parseSubmittedYear(submittedAgo);
-    return {
-      id,
-      title,
-      url: href.startsWith("http") ? href : new URL(href, "https://rule34video.com").href,
-      previewUrl,
-      thumbUrl,
-      durationSeconds,
-      durationFormatted,
-      ratingPercent,
-      votesCount,
-      viewsCount,
-      viewsFormatted,
-      commentsCount,
-      hasSound,
-      isHd,
-      isFuta,
-      isWatched,
-      submittedAgo,
-      submittedYear
-    };
-  }
-  function videoIdFromHref(href) {
-    if (!href) return "";
-    const m = /video\/(\d+)/.exec(href);
-    return (m == null ? void 0 : m[1]) || "";
-  }
-  function viewsToNearestStep(views, steps) {
-    if (!steps.length) return 0;
-    let best = 0;
-    let bestDist = Math.abs(views - steps[0]);
-    for (let i = 1; i < steps.length; i++) {
-      const d = Math.abs(views - steps[i]);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
-    }
-    return best;
-  }
-  function matchesClientFilter(card, filter) {
-    if (filter.query.trim()) {
-      const keywords = filter.query.toLowerCase().trim().split(/\s+/);
-      const titleLower = card.title.toLowerCase();
-      for (const kw of keywords) {
-        if (!titleLower.includes(kw)) return false;
-      }
-    }
-    if (filter.soundOnly && !card.hasSound) return false;
-    if (filter.hdOnly && !card.isHd) return false;
-    if (filter.futaFilter === "hide" && card.isFuta) return false;
-    if (filter.futaFilter === "only" && !card.isFuta) return false;
-    if (filter.hideWatched && card.isWatched) return false;
-    if (filter.minRating > 0 && card.ratingPercent < filter.minRating) return false;
-    if (filter.minViews > 0 && card.viewsCount < filter.minViews) return false;
-    if (filter.minYear > BASE_YEAR && card.submittedYear < filter.minYear) return false;
-    if (filter.durationMinSeconds !== null && card.durationSeconds < filter.durationMinSeconds) {
-      return false;
-    }
-    return true;
-  }
-  function resolveNextPageUrl(currentUrlStr, nextRawHref) {
-    try {
-      const trimmedHref = nextRawHref.trim();
-      if (!trimmedHref || trimmedHref.startsWith("#") || trimmedHref.startsWith("javascript:")) {
-        return "";
-      }
-      const current = new URL(currentUrlStr);
-      const next = new URL(trimmedHref, current.href);
-      if (!next.search && current.search) {
-        next.search = current.search;
-      } else if (current.search && next.search) {
-        current.searchParams.forEach((val, key) => {
-          if (!next.searchParams.has(key)) {
-            next.searchParams.set(key, val);
-          }
-        });
-      }
-      return next.toString();
-    } catch {
-      return nextRawHref;
-    }
-  }
-  function parseCurrentUrlFilters(urlStr) {
-    try {
-      const url = new URL(urlStr);
-      const params = url.searchParams;
-      const result = {};
-      const fromDate = params.get("post_date_from");
-      if (fromDate) {
-        const yrMatch = /^(\d{4})/.exec(fromDate);
-        if (yrMatch) {
-          result.minYear = Math.max(BASE_YEAR, parseInt(yrMatch[1], 10));
-        }
-      }
-      const fromDur = params.get("duration_from");
-      if (fromDur && !isNaN(parseInt(fromDur, 10))) {
-        result.durationMinSeconds = parseInt(fromDur, 10);
-      }
-      return result;
-    } catch {
-      return {};
-    }
-  }
-  const AD_SELECTORS = [
-    ".spot-thumb",
-    ".spots",
-    ".sidebar_ad_buttons",
-    ".footer_spots",
-    "ins.adsbyjuicy",
-    'iframe[src*="sadbaguette"]',
-    'iframe[src*="traffic"]',
-    'iframe[src*="ads"]',
-    'iframe[src*="adserver"]',
-    'iframe[src*="/ads/"]',
-    'iframe[src*="juicy"]',
-    ".item.thumb:has(header)",
-    ".item.thumb:has(iframe)",
-    '.item.thumb a[href*="/v1/d.php"]'
-  ];
-  function cleanAds(root = document) {
-    for (const selector of AD_SELECTORS) {
-      try {
-        const elements = root.querySelectorAll(selector);
-        for (const el of elements) {
-          const cardParent = el.closest(".item.thumb") ?? el;
-          cardParent.remove();
-        }
-      } catch {
-      }
-    }
-    const thumbs = root.querySelectorAll(".item.thumb");
-    for (const thumb of thumbs) {
-      if (isAdCard(thumb)) {
-        thumb.remove();
-      }
-    }
-  }
-  const WATCHED_KEY = "better_rule34_watched_v1";
-  const MAX_WATCHED = 2e3;
-  function readWatchedIds() {
-    try {
-      const raw = localStorage.getItem(WATCHED_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((v) => typeof v === "string");
-    } catch {
-      return [];
-    }
-  }
-  function getWatchedIds() {
-    return new Set(readWatchedIds());
-  }
-  function isWatchedId(id) {
-    if (!id) return false;
-    return getWatchedIds().has(id);
-  }
-  function markWatched(id) {
-    if (!id) return;
-    try {
-      const ids = readWatchedIds().filter((v) => v !== id);
-      ids.push(id);
-      while (ids.length > MAX_WATCHED) ids.shift();
-      localStorage.setItem(WATCHED_KEY, JSON.stringify(ids));
-    } catch {
-    }
-  }
-  function findVideoAnchor(from) {
-    var _a;
-    if (!from) return null;
-    if (from instanceof HTMLAnchorElement && /\/video\//.test(from.getAttribute("href") || "")) {
-      return from;
-    }
-    return (_a = from.closest) == null ? void 0 : _a.call(from, 'a[href*="/video/"]');
-  }
-  function hardenAnchor(a) {
-    if (a.target !== "_blank") a.target = "_blank";
-    const rel = (a.getAttribute("rel") || "").toLowerCase();
-    if (!rel.includes("noopener")) {
-      a.setAttribute("rel", (rel ? `${rel} ` : "") + "noopener");
-    }
-  }
-  function hardenAnchorsIn(root) {
-    const anchors = root.querySelectorAll('a[href*="/video/"]');
-    for (const a of anchors) hardenAnchor(a);
-  }
-  function shouldNewTabClick(e) {
-    return e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
-  }
-  let newTabWired = false;
-  function initNewTab(scope = document) {
-    hardenAnchorsIn(scope);
-    if (newTabWired) return () => {
-    };
-    newTabWired = true;
-    const onClick = (e) => {
-      const target = e.target;
-      if (!target || !(target instanceof Element)) return;
-      const anchor = findVideoAnchor(target);
-      if (!anchor) return;
-      hardenAnchor(anchor);
-      if (!shouldNewTabClick(e)) return;
-      const href = anchor.getAttribute("href") || anchor.href;
-      if (!href) return;
-      e.preventDefault();
-      e.stopPropagation();
-      markWatched(videoIdFromHref(href));
-      window.open(anchor.href, "_blank", "noopener");
-    };
-    document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
-  }
-  function isListingPage(urlStr = window.location.href) {
-    try {
-      const url = new URL(urlStr);
-      if (/\/video(\/|$)/.test(url.pathname)) return false;
-      if (/^\/(login|signup|invite|premium|static|info|feedback)/.test(url.pathname)) return false;
-      return true;
-    } catch {
-      return true;
-    }
-  }
-  function findVideosContainer() {
-    return document.querySelector(".content_general .thumbs") || document.querySelector('[id^="custom_list_videos_"][id$="_items"].thumbs') || document.querySelector(".twocolumns .thumbs") || document.querySelector(".thumbs") || document.querySelector('[id$="_items"]');
-  }
-  function unclipBodyOverflow() {
-    const wrappers = document.querySelectorAll("body > div");
-    for (const w of wrappers) {
-      if (w.style.overflow === "hidden") {
-        w.style.overflow = "visible";
-      }
-    }
-  }
-  function parseNextLink(root, baseUrl) {
-    const nextLink = root.querySelector(
-      ".pagination .item.pager.next a, .pagination .item.active + .item a, .pagination a.next"
-    );
-    if (!nextLink) return { url: null, fromParam: null };
-    const raw = nextLink.getAttribute("href") || "";
-    const dataParams = nextLink.getAttribute("data-parameters") || "";
-    if (raw && !raw.startsWith("#") && !raw.startsWith("javascript:")) {
-      const resolved = resolveNextPageUrl(baseUrl, raw);
-      return { url: resolved || null, fromParam: null };
-    }
-    if (dataParams) {
-      const match = /(?:from_videos(?:\+from_albums)?|from_videos|from_albums|from):(\d+)/i.exec(dataParams);
-      if (match) {
-        return { url: null, fromParam: parseInt(match[1], 10) };
-      }
-    }
-    return { url: null, fromParam: null };
-  }
-  class AutoPager {
-    constructor(options) {
-      __publicField(this, "container", null);
-      __publicField(this, "statusContainer", null);
-      __publicField(this, "sentinel", null);
-      __publicField(this, "observer", null);
-      __publicField(this, "nextUrl", null);
-      __publicField(this, "currentPage", 1);
-      __publicField(this, "initialPage", 1);
-      __publicField(this, "lastPageUrl", window.location.href);
-      __publicField(this, "isLoading", false);
-      __publicField(this, "isAppending", false);
-      __publicField(this, "seenCardIds", /* @__PURE__ */ new Set());
-      __publicField(this, "onNewCards");
-      __publicField(this, "onPageLoaded");
-      __publicField(this, "scrollHandler", null);
-      this.onNewCards = options.onNewCards;
-      this.onPageLoaded = options.onPageLoaded;
-    }
-    init() {
-      var _a;
-      unclipBodyOverflow();
-      if (!isListingPage()) return;
-      this.container = findVideosContainer();
-      if (!this.container) return;
-      this.currentPage = this.detectCurrentPageNumber();
-      this.initialPage = this.currentPage;
-      this.lastPageUrl = window.location.href;
-      const initialCards = this.container.querySelectorAll(".item.thumb");
-      for (const card of initialCards) {
-        if (isAdCard(card)) {
-          card.remove();
-          continue;
-        }
-        const id = card.dataset.videoCardId || ((_a = card.querySelector('a[href*="/video/"]')) == null ? void 0 : _a.getAttribute("href"));
-        if (id) this.seenCardIds.add(id);
-      }
-      this.detectNextPageUrl(document);
-      this.mountStatusElements();
-      this.setupObserver();
-      this.setupScrollListener();
-    }
-    getIsAppending() {
-      return this.isAppending;
-    }
-    getNextUrl() {
-      return this.nextUrl;
-    }
-    getCurrentPage() {
-      return this.currentPage;
-    }
-    getTotalLoadedCount() {
-      return this.seenCardIds.size;
-    }
-    /** Catalog pages loaded in this session (1 = native first page). */
-    getPagesLoaded() {
-      return Math.max(1, this.currentPage - this.initialPage + 1);
-    }
-    /** URL of the most recently loaded catalog page (native URL for page 1). */
-    getCurrentPageUrl() {
-      return this.lastPageUrl;
-    }
-    detectCurrentPageNumber() {
-      try {
-        const url = new URL(window.location.href);
-        const fromParam = url.searchParams.get("from_videos") || url.searchParams.get("from_videos+from_albums") || url.searchParams.get("from") || url.searchParams.get("page") || url.searchParams.get("p");
-        if (fromParam) {
-          const p = parseInt(fromParam, 10);
-          if (!isNaN(p) && p > 0) return p;
-        }
-        const pathname = url.pathname;
-        const entityMatch = /^\/(?:tags|categories|models|channels|playlists)\/[^/]+\/(\d+)\/?$/.exec(pathname);
-        if (entityMatch) {
-          const p = parseInt(entityMatch[1], 10);
-          if (!isNaN(p) && p > 0) return p;
-        }
-        const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
-        if (catalogMatch && !["tags", "categories", "models", "channels", "playlists", "video"].includes(catalogMatch[1])) {
-          const p = parseInt(catalogMatch[2], 10);
-          if (!isNaN(p) && p > 0) return p;
-        }
-      } catch {
-      }
-      return 1;
-    }
-    detectNextPageUrl(root) {
-      const { url, fromParam } = parseNextLink(root, window.location.href);
-      this.nextUrl = null;
-      if (url) {
-        this.nextUrl = url;
-      } else if (fromParam !== null && !isNaN(fromParam)) {
-        this.nextUrl = this.computeNextPageUrlFromCurrent(window.location.href, fromParam);
-      }
-      if (!this.nextUrl) {
-        try {
-          const pathname = new URL(window.location.href).pathname;
-          if (!pathname.includes("/search/")) {
-            this.nextUrl = this.computeNextPageUrlFromCurrent(window.location.href, this.currentPage + 1);
-          }
-        } catch {
-          this.nextUrl = null;
-        }
-      }
-      const nativePagination = document.querySelector(".pagination");
-      if (nativePagination) {
-        nativePagination.style.display = "none";
-      }
-    }
-    computeNextPageUrlFromCurrent(currentUrlStr, nextPageNum) {
-      try {
-        const url = new URL(currentUrlStr);
-        const pathname = url.pathname;
-        if (pathname === "" || pathname === "/") {
-          url.pathname = `/latest-updates/${nextPageNum}/`;
-          return url.toString();
-        }
-        if (pathname.includes("/search/")) {
-          url.searchParams.set("from_videos", String(nextPageNum));
-          url.searchParams.delete("from_videos+from_albums");
-          return url.toString();
-        }
-        const entityMatch = /^(\/(?:tags|categories|models|channels|playlists)\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
-        if (entityMatch) {
-          url.pathname = `${entityMatch[1]}/${nextPageNum}/`;
-          return url.toString();
-        }
-        const catalogMatch = /^(\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
-        if (catalogMatch && !["tags", "categories", "models", "channels", "playlists", "video"].includes(catalogMatch[1].slice(1))) {
-          url.pathname = `${catalogMatch[1]}/${nextPageNum}/`;
-          return url.toString();
-        }
-        if (/\/\d+\/?$/.test(pathname)) {
-          url.pathname = pathname.replace(/\/\d+\/?$/, `/${nextPageNum}/`);
-          return url.toString();
-        }
-        if (pathname.endsWith("/")) {
-          url.pathname = `${pathname}${nextPageNum}/`;
-          return url.toString();
-        } else {
-          url.pathname = `${pathname}/${nextPageNum}/`;
-          return url.toString();
-        }
-      } catch {
-        return null;
-      }
-    }
-    mountStatusElements() {
-      if (!this.container) return;
-      if (!this.statusContainer) {
-        this.statusContainer = document.createElement("div");
-        this.statusContainer.className = "br34-autopager-container";
-        this.container.after(this.statusContainer);
-      }
-      if (!this.sentinel) {
-        this.sentinel = document.createElement("div");
-        this.sentinel.className = "br34-sentinel";
-        this.sentinel.style.height = "1px";
-        this.statusContainer.before(this.sentinel);
-      }
-      this.updateStatusDisplay();
-    }
-    setupObserver() {
-      var _a;
-      if (typeof IntersectionObserver === "undefined") return;
-      (_a = this.observer) == null ? void 0 : _a.disconnect();
-      this.observer = new IntersectionObserver(
-        (entries) => {
-          if (this.isLoading || !this.nextUrl) return;
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              void this.loadNextPage();
-              break;
-            }
-          }
-        },
-        {
-          rootMargin: "1000px 0px",
-          threshold: 0
-        }
-      );
-      if (this.sentinel) {
-        this.observer.observe(this.sentinel);
-      }
-    }
-    setupScrollListener() {
-      if (this.scrollHandler) return;
-      let ticking = false;
-      this.scrollHandler = () => {
-        if (ticking) return;
-        ticking = true;
-        requestAnimationFrame(() => {
-          ticking = false;
-          if (this.isLoading || !this.nextUrl) return;
-          const scrollY = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
-          const winHeight = window.innerHeight || document.documentElement.clientHeight;
-          const docHeight = Math.max(
-            document.body.scrollHeight,
-            document.documentElement.scrollHeight,
-            document.body.offsetHeight,
-            document.documentElement.offsetHeight
-          );
-          if (scrollY + winHeight >= docHeight - 1200) {
-            void this.loadNextPage();
-          }
-        });
-      };
-      window.addEventListener("scroll", this.scrollHandler, { passive: true });
-      window.addEventListener("touchmove", this.scrollHandler, { passive: true });
-      window.addEventListener("resize", this.scrollHandler, { passive: true });
-    }
-    updateStatusDisplay() {
-      if (!this.statusContainer) return;
-      if (this.isLoading) {
-        this.statusContainer.innerHTML = `
+(function() {
+	"use strict";
+	var NON_LISTING_SEGMENTS = [...[
+		"tags",
+		"categories",
+		"models",
+		"channels",
+		"playlists"
+	], "video"];
+	function isNonListingSegment(segment) {
+		return NON_LISTING_SEGMENTS.includes(segment);
+	}
+	function isPaginationKey(key) {
+		return /^from/i.test(key) || /^page$/i.test(key) || /^p$/i.test(key);
+	}
+	function stripPageSegment(pathname) {
+		if (!pathname || pathname === "/") return "/";
+		if (/^\/(?:tags|categories|models|channels|playlists)\/[^/]+\/\d+\/?$/.exec(pathname)) return pathname.replace(/\/\d+\/?$/, "/");
+		const catalogMatch = /^\/([^/]+)\/\d+\/?$/.exec(pathname);
+		if (catalogMatch && !isNonListingSegment(catalogMatch[1])) return `/${catalogMatch[1]}/`;
+		return pathname;
+	}
+	function pageNumberFromPath(pathname) {
+		const entityMatch = /^\/(?:tags|categories|models|channels|playlists)\/[^/]+\/(\d+)\/?$/.exec(pathname);
+		if (entityMatch) {
+			const p = parseInt(entityMatch[1], 10);
+			if (!isNaN(p) && p > 0) return p;
+		}
+		const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
+		if (catalogMatch && !isNonListingSegment(catalogMatch[1])) {
+			const p = parseInt(catalogMatch[2], 10);
+			if (!isNaN(p) && p > 0) return p;
+		}
+		return null;
+	}
+	function appendPageToPath(pathname, pageNum) {
+		if (!pathname || pathname === "/") return `/latest-updates/${pageNum}/`;
+		const entityMatch = /^(\/(?:tags|categories|models|channels|playlists)\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
+		if (entityMatch) return `${entityMatch[1]}/${pageNum}/`;
+		const catalogMatch = /^(\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
+		if (catalogMatch && !isNonListingSegment(catalogMatch[1].slice(1))) return `${catalogMatch[1]}/${pageNum}/`;
+		if (/\/\d+\/?$/.test(pathname)) return pathname.replace(/\/\d+\/?$/, `/${pageNum}/`);
+		if (pathname.endsWith("/")) return `${pathname}${pageNum}/`;
+		return `${pathname}/${pageNum}/`;
+	}
+	var BASE_YEAR = 2018;
+	var DEFAULT_FILTER = {
+		query: "",
+		soundOnly: false,
+		hdOnly: false,
+		futaFilter: "all",
+		hideWatched: false,
+		minRating: 0,
+		minViews: 0,
+		minYear: BASE_YEAR,
+		durationMinSeconds: null
+	};
+	function parseDuration(timeStr) {
+		if (!timeStr) return 0;
+		const cleaned = timeStr.trim().replace(/[^\d:]/g, "");
+		if (!cleaned) return 0;
+		const parts = cleaned.split(":").map((p) => parseInt(p, 10));
+		if (parts.some(isNaN)) return 0;
+		if (parts.length === 1) return parts[0];
+		if (parts.length === 2) return parts[0] * 60 + parts[1];
+		if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+		return 0;
+	}
+	function parseViews(viewStr) {
+		if (!viewStr) return 0;
+		const match = /([\d.]+)\s*([KkMmBb])?/.exec(viewStr.replace(/,/g, "").trim());
+		if (!match) return 0;
+		const num = parseFloat(match[1]);
+		if (isNaN(num)) return 0;
+		const unit = match[2]?.toUpperCase();
+		if (unit === "K") return Math.round(num * 1e3);
+		if (unit === "M") return Math.round(num * 1e6);
+		if (unit === "B") return Math.round(num * 1e9);
+		return Math.round(num);
+	}
+	function parseRating(ratingStr) {
+		if (!ratingStr) return {
+			percent: 0,
+			count: 0
+		};
+		const percentMatch = /(\d+)%/.exec(ratingStr);
+		const countMatch = /\(([\d,]+)\)/.exec(ratingStr);
+		return {
+			percent: percentMatch ? parseInt(percentMatch[1], 10) : 0,
+			count: countMatch ? parseInt(countMatch[1].replace(/,/g, ""), 10) : 0
+		};
+	}
+	function parseSubmittedYear(dateStr, currentYear = new Date().getFullYear()) {
+		if (!dateStr) return currentYear;
+		const text = dateStr.toLowerCase().trim();
+		const explicitYearMatch = /\b(20[12]\d)\b/.exec(text);
+		if (explicitYearMatch) return parseInt(explicitYearMatch[1], 10);
+		const yearsAgoMatch = /(\d+)\s+years?\s+ago/.exec(text);
+		if (yearsAgoMatch) {
+			const diff = parseInt(yearsAgoMatch[1], 10);
+			return Math.max(BASE_YEAR, currentYear - diff);
+		}
+		const monthsAgoMatch = /(\d+)\s+months?\s+ago/.exec(text);
+		if (monthsAgoMatch) {
+			const months = parseInt(monthsAgoMatch[1], 10);
+			const d = new Date();
+			d.setMonth(d.getMonth() - months);
+			return d.getFullYear();
+		}
+		return currentYear;
+	}
+	function isAdCard(el) {
+		if (el.classList.contains("spot-thumb") || el.closest(".spots")) return true;
+		if (el.querySelector("iframe")) return true;
+		const header = el.querySelector("header");
+		if (header && /AD/i.test(header.textContent ?? "")) return true;
+		const link = el.querySelector("a.th, a");
+		if (link) {
+			const href = link.getAttribute("href") || "";
+			if (href.includes("/v1/d.php") || href.includes("sadbaguette") || href.includes("ku34bh9la09")) return true;
+		}
+		const hasVideoCardId = Boolean(el.dataset.videoCardId);
+		const hasVideoHref = Boolean(el.querySelector("a[href*=\"/video/\"]"));
+		return !hasVideoCardId && !hasVideoHref;
+	}
+	function extractCardData(el) {
+		if (isAdCard(el)) return null;
+		const cardLink = el.querySelector("a.th, a[href*=\"/video/\"]");
+		const href = cardLink?.getAttribute("href") || "";
+		const id = el.dataset.videoCardId || videoIdFromHref(href) || "";
+		if (!id || !href) return null;
+		const title = el.querySelector(".thumb_title")?.textContent?.trim() || cardLink?.getAttribute("title")?.trim() || "";
+		const imgEl = el.querySelector("img.thumb, img");
+		const thumbUrl = imgEl?.getAttribute("data-webp") || imgEl?.getAttribute("data-original") || imgEl?.src || "";
+		const previewWrap = el.querySelector(".wrap_image");
+		const previewUrl = previewWrap?.dataset.preview || previewWrap?.getAttribute("data-preview") || null;
+		const durationFormatted = el.querySelector(".time")?.textContent?.trim() || "";
+		const durationSeconds = parseDuration(durationFormatted);
+		const { percent: ratingPercent, count: votesCount } = parseRating((el.querySelector(".video-card-meta__rating") || el.querySelector(".rating"))?.textContent ?? "");
+		const viewsFormatted = (el.querySelector(".video-views-count") || el.querySelector(".views"))?.textContent?.trim() || "";
+		const viewsCount = parseViews(viewsFormatted);
+		const commentsEl = el.querySelector(".video-comments-count");
+		const commentsCount = parseInt(commentsEl?.textContent?.trim() || "0", 10) || 0;
+		const hasSound = el.querySelector(".sound") !== null;
+		const isHd = el.querySelector(".quality") !== null || el.querySelector(".custom-hd") !== null;
+		const isFuta = el.querySelector(".futa") !== null;
+		const isWatched = previewWrap?.classList.contains("watched") || el.classList.contains("watched") || Boolean(el.querySelector(".watched"));
+		const dateEl = el.querySelector(".video-card-meta__date") || el.querySelector(".added");
+		const submittedAgo = dateEl?.getAttribute("title") || dateEl?.textContent?.trim() || "";
+		const submittedYear = parseSubmittedYear(submittedAgo);
+		return {
+			id,
+			title,
+			url: href.startsWith("http") ? href : new URL(href, "https://rule34video.com").href,
+			previewUrl,
+			thumbUrl,
+			durationSeconds,
+			durationFormatted,
+			ratingPercent,
+			votesCount,
+			viewsCount,
+			viewsFormatted,
+			commentsCount,
+			hasSound,
+			isHd,
+			isFuta,
+			isWatched,
+			submittedAgo,
+			submittedYear
+		};
+	}
+	function videoIdFromHref(href) {
+		if (!href) return "";
+		return /video\/(\d+)/.exec(href)?.[1] || "";
+	}
+	function viewsToNearestStep(views, steps) {
+		if (!steps.length) return 0;
+		let best = 0;
+		let bestDist = Math.abs(views - steps[0]);
+		for (let i = 1; i < steps.length; i++) {
+			const d = Math.abs(views - steps[i]);
+			if (d < bestDist) {
+				bestDist = d;
+				best = i;
+			}
+		}
+		return best;
+	}
+	function matchesClientFilter(card, filter) {
+		if (filter.query.trim()) {
+			const keywords = filter.query.toLowerCase().trim().split(/\s+/);
+			const titleLower = card.title.toLowerCase();
+			for (const kw of keywords) if (!titleLower.includes(kw)) return false;
+		}
+		if (filter.soundOnly && !card.hasSound) return false;
+		if (filter.hdOnly && !card.isHd) return false;
+		if (filter.futaFilter === "hide" && card.isFuta) return false;
+		if (filter.futaFilter === "only" && !card.isFuta) return false;
+		if (filter.hideWatched && card.isWatched) return false;
+		if (filter.minRating > 0 && card.ratingPercent < filter.minRating) return false;
+		if (filter.minViews > 0 && card.viewsCount < filter.minViews) return false;
+		if (filter.minYear > 2018 && card.submittedYear < filter.minYear) return false;
+		if (filter.durationMinSeconds !== null && card.durationSeconds < filter.durationMinSeconds) return false;
+		return true;
+	}
+	function resolveNextPageUrl(currentUrlStr, nextRawHref) {
+		try {
+			const trimmedHref = nextRawHref.trim();
+			if (!trimmedHref || trimmedHref.startsWith("#") || trimmedHref.startsWith("javascript:")) return "";
+			const current = new URL(currentUrlStr);
+			const next = new URL(trimmedHref, current.href);
+			if (!next.search && current.search) {
+				const carried = new URLSearchParams();
+				current.searchParams.forEach((val, key) => {
+					if (!isPaginationKey(key)) carried.append(key, val);
+				});
+				next.search = carried.toString();
+			} else if (current.search && next.search) current.searchParams.forEach((val, key) => {
+				if (!isPaginationKey(key) && !next.searchParams.has(key)) next.searchParams.set(key, val);
+			});
+			return next.toString();
+		} catch {
+			return nextRawHref;
+		}
+	}
+	function parseCurrentUrlFilters(urlStr) {
+		try {
+			const params = new URL(urlStr).searchParams;
+			const result = {};
+			const fromDate = params.get("post_date_from");
+			if (fromDate) {
+				const yrMatch = /^(\d{4})/.exec(fromDate);
+				if (yrMatch) result.minYear = Math.max(BASE_YEAR, parseInt(yrMatch[1], 10));
+			}
+			const fromDur = params.get("duration_from");
+			if (fromDur && !isNaN(parseInt(fromDur, 10))) result.durationMinSeconds = parseInt(fromDur, 10);
+			return result;
+		} catch {
+			return {};
+		}
+	}
+	var AD_SELECTORS = [
+		".spot-thumb",
+		".spots",
+		".sidebar_ad_buttons",
+		".footer_spots",
+		"ins.adsbyjuicy",
+		"iframe[src*=\"sadbaguette\"]",
+		"iframe[src*=\"traffic\"]",
+		"iframe[src*=\"ads\"]",
+		"iframe[src*=\"adserver\"]",
+		"iframe[src*=\"/ads/\"]",
+		"iframe[src*=\"juicy\"]",
+		".item.thumb:has(header)",
+		".item.thumb:has(iframe)",
+		".item.thumb a[href*=\"/v1/d.php\"]"
+	];
+	function cleanAds(root = document) {
+		for (const selector of AD_SELECTORS) try {
+			const elements = root.querySelectorAll(selector);
+			for (const el of elements) (el.closest(".item.thumb") ?? el).remove();
+		} catch {}
+		const thumbs = root.querySelectorAll(".item.thumb");
+		for (const thumb of thumbs) if (isAdCard(thumb)) thumb.remove();
+	}
+	var WATCHED_KEY = "better_rule34_watched_v1";
+	var MAX_WATCHED = 2e3;
+	function readWatchedIds() {
+		try {
+			const raw = localStorage.getItem(WATCHED_KEY);
+			if (!raw) return [];
+			const parsed = JSON.parse(raw);
+			if (!Array.isArray(parsed)) return [];
+			return parsed.filter((v) => typeof v === "string");
+		} catch {
+			return [];
+		}
+	}
+	var cachedIds = null;
+	function getWatchedIds() {
+		if (!cachedIds) cachedIds = new Set(readWatchedIds());
+		return cachedIds;
+	}
+	function isWatchedId(id) {
+		if (!id) return false;
+		return getWatchedIds().has(id);
+	}
+	function markWatched(id) {
+		if (!id) return;
+		try {
+			const ids = readWatchedIds().filter((v) => v !== id);
+			ids.push(id);
+			while (ids.length > MAX_WATCHED) ids.shift();
+			localStorage.setItem(WATCHED_KEY, JSON.stringify(ids));
+			if (cachedIds) {
+				cachedIds.delete(id);
+				cachedIds.add(id);
+				while (cachedIds.size > MAX_WATCHED) {
+					const oldest = cachedIds.values().next();
+					if (oldest.done) break;
+					cachedIds.delete(oldest.value);
+				}
+			}
+		} catch {}
+	}
+	function findVideoAnchor(from) {
+		if (!from) return null;
+		const anchor = from.closest?.("a[href*=\"/video/\"]");
+		if (!(anchor instanceof HTMLAnchorElement)) return null;
+		if (!/\/video\//.test(anchor.getAttribute("href") || "")) return null;
+		return anchor;
+	}
+	function hardenAnchor(a) {
+		if (a.target !== "_blank") a.target = "_blank";
+		const rel = (a.getAttribute("rel") || "").toLowerCase();
+		if (!rel.includes("noopener")) a.setAttribute("rel", (rel ? `${rel} ` : "") + "noopener");
+	}
+	function hardenAnchorsIn(root) {
+		const anchors = root.querySelectorAll("a[href*=\"/video/\"]");
+		for (const a of anchors) hardenAnchor(a);
+	}
+	function shouldNewTabClick(e) {
+		return e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
+	}
+	var newTabWired = false;
+	function initNewTab(scope = document) {
+		hardenAnchorsIn(scope);
+		if (newTabWired) return () => {};
+		newTabWired = true;
+		const onClick = (e) => {
+			const target = e.target;
+			if (!target || !(target instanceof Element)) return;
+			const anchor = findVideoAnchor(target);
+			if (!anchor) return;
+			hardenAnchor(anchor);
+			if (!shouldNewTabClick(e)) return;
+			const href = anchor.getAttribute("href") || anchor.href;
+			if (!href) return;
+			e.preventDefault();
+			e.stopPropagation();
+			markWatched(videoIdFromHref(href));
+			window.open(anchor.href, "_blank", "noopener");
+		};
+		const onAuxClick = (e) => {
+			if (e.button !== 1) return;
+			const target = e.target;
+			if (!target || !(target instanceof Element)) return;
+			const anchor = findVideoAnchor(target);
+			if (!anchor) return;
+			const href = anchor.getAttribute("href") || anchor.href;
+			if (!href) return;
+			markWatched(videoIdFromHref(href));
+		};
+		document.addEventListener("click", onClick, true);
+		document.addEventListener("auxclick", onAuxClick, true);
+		return () => {
+			document.removeEventListener("click", onClick, true);
+			document.removeEventListener("auxclick", onAuxClick, true);
+		};
+	}
+	function isListingPage(urlStr = window.location.href) {
+		try {
+			const url = new URL(urlStr);
+			if (/\/video(\/|$)/.test(url.pathname)) return false;
+			if (/^\/(login|signup|invite|premium|static|info|feedback)/.test(url.pathname)) return false;
+			return true;
+		} catch {
+			return true;
+		}
+	}
+	function findVideosContainer() {
+		return document.querySelector(".content_general .thumbs") || document.querySelector("[id^=\"custom_list_videos_\"][id$=\"_items\"].thumbs") || document.querySelector(".twocolumns .thumbs") || document.querySelector(".thumbs") || document.querySelector("[id$=\"_items\"]");
+	}
+	function unclipBodyOverflow() {
+		const wrappers = document.querySelectorAll("body > div");
+		for (const w of wrappers) if (w.style.overflow === "hidden") w.style.overflow = "visible";
+	}
+	function parseNextLink(root, baseUrl) {
+		const nextLink = root.querySelector(".pagination .item.pager.next a, .pagination .item.active + .item a, .pagination a.next");
+		if (!nextLink) return {
+			url: null,
+			fromParam: null
+		};
+		const raw = nextLink.getAttribute("href") || "";
+		const dataParams = nextLink.getAttribute("data-parameters") || "";
+		if (raw && !raw.startsWith("#") && !raw.startsWith("javascript:")) return {
+			url: resolveNextPageUrl(baseUrl, raw) || null,
+			fromParam: null
+		};
+		if (dataParams) {
+			const match = /(?:from_videos(?:\+| )from_albums|from_videos|from_albums|from):(\d+)/i.exec(dataParams);
+			if (match) return {
+				url: null,
+				fromParam: parseInt(match[1], 10)
+			};
+		}
+		return {
+			url: null,
+			fromParam: null
+		};
+	}
+	var AutoPager = class {
+		container = null;
+		statusContainer = null;
+		sentinel = null;
+		observer = null;
+		nextUrl = null;
+		currentPage = 1;
+		initialPage = 1;
+		lastPageUrl = window.location.href;
+		isLoading = false;
+		isAppending = false;
+		seenCardIds = new Set();
+		onNewCards;
+		onPageLoaded;
+		scrollHandler = null;
+		constructor(options) {
+			this.onNewCards = options.onNewCards;
+			this.onPageLoaded = options.onPageLoaded;
+		}
+		init() {
+			unclipBodyOverflow();
+			if (!isListingPage()) return;
+			this.container = findVideosContainer();
+			if (!this.container) return;
+			this.currentPage = this.detectCurrentPageNumber();
+			this.initialPage = this.currentPage;
+			this.lastPageUrl = window.location.href;
+			const initialCards = this.container.querySelectorAll(".item.thumb");
+			for (const card of initialCards) {
+				if (isAdCard(card)) {
+					card.remove();
+					continue;
+				}
+				const id = card.dataset.videoCardId || card.querySelector("a[href*=\"/video/\"]")?.getAttribute("href");
+				if (id) this.seenCardIds.add(id);
+			}
+			this.detectNextPageUrl(document);
+			this.mountStatusElements();
+			this.setupObserver();
+			this.setupScrollListener();
+		}
+		getIsAppending() {
+			return this.isAppending;
+		}
+		getNextUrl() {
+			return this.nextUrl;
+		}
+		getCurrentPage() {
+			return this.currentPage;
+		}
+		getTotalLoadedCount() {
+			return this.seenCardIds.size;
+		}
+		getPagesLoaded() {
+			return Math.max(1, this.currentPage - this.initialPage + 1);
+		}
+		getCurrentPageUrl() {
+			return this.lastPageUrl;
+		}
+		detectCurrentPageNumber() {
+			try {
+				const url = new URL(window.location.href);
+				const fromParam = url.searchParams.get("from_videos") || url.searchParams.get("from_videos+from_albums") || url.searchParams.get("from_videos from_albums") || url.searchParams.get("from") || url.searchParams.get("page") || url.searchParams.get("p");
+				if (fromParam) {
+					const p = parseInt(fromParam, 10);
+					if (!isNaN(p) && p > 0) return p;
+				}
+				const pageFromPath = pageNumberFromPath(url.pathname);
+				if (pageFromPath !== null) return pageFromPath;
+			} catch {}
+			return 1;
+		}
+		detectNextPageUrl(root) {
+			const { url, fromParam } = parseNextLink(root, window.location.href);
+			this.nextUrl = null;
+			if (url) this.nextUrl = url;
+			else if (fromParam !== null && !isNaN(fromParam)) this.nextUrl = this.computeNextPageUrlFromCurrent(window.location.href, fromParam);
+			if (!this.nextUrl) try {
+				if (!new URL(window.location.href).pathname.includes("/search/")) this.nextUrl = this.computeNextPageUrlFromCurrent(window.location.href, this.currentPage + 1);
+			} catch {
+				this.nextUrl = null;
+			}
+			const nativePagination = document.querySelector(".pagination");
+			if (nativePagination) nativePagination.style.display = "none";
+		}
+		computeNextPageUrlFromCurrent(currentUrlStr, nextPageNum) {
+			try {
+				const url = new URL(currentUrlStr);
+				const pathname = url.pathname;
+				if (pathname.includes("/search/")) {
+					url.searchParams.set("from_videos", String(nextPageNum));
+					url.searchParams.delete("from_videos+from_albums");
+					url.searchParams.delete("from_videos from_albums");
+					return url.toString();
+				}
+				url.pathname = appendPageToPath(pathname, nextPageNum);
+				return url.toString();
+			} catch {
+				return null;
+			}
+		}
+		mountStatusElements() {
+			if (!this.container) return;
+			if (!this.statusContainer) {
+				this.statusContainer = document.createElement("div");
+				this.statusContainer.className = "br34-autopager-container";
+				this.container.after(this.statusContainer);
+			}
+			if (!this.sentinel) {
+				this.sentinel = document.createElement("div");
+				this.sentinel.className = "br34-sentinel";
+				this.sentinel.style.height = "1px";
+				this.statusContainer.before(this.sentinel);
+			}
+			this.updateStatusDisplay();
+		}
+		setupObserver() {
+			if (typeof IntersectionObserver === "undefined") return;
+			this.observer?.disconnect();
+			this.observer = new IntersectionObserver((entries) => {
+				if (this.isLoading || !this.nextUrl) return;
+				for (const entry of entries) if (entry.isIntersecting) {
+					this.loadNextPage();
+					break;
+				}
+			}, {
+				rootMargin: "1000px 0px",
+				threshold: 0
+			});
+			if (this.sentinel) this.observer.observe(this.sentinel);
+		}
+		setupScrollListener() {
+			if (this.scrollHandler) return;
+			let ticking = false;
+			this.scrollHandler = () => {
+				if (ticking) return;
+				ticking = true;
+				requestAnimationFrame(() => {
+					ticking = false;
+					if (this.isLoading || !this.nextUrl) return;
+					const scrollY = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+					const winHeight = window.innerHeight || document.documentElement.clientHeight;
+					const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight, document.documentElement.offsetHeight);
+					if (scrollY + winHeight >= docHeight - 1200) this.loadNextPage();
+				});
+			};
+			window.addEventListener("scroll", this.scrollHandler, { passive: true });
+			window.addEventListener("touchmove", this.scrollHandler, { passive: true });
+			window.addEventListener("resize", this.scrollHandler, { passive: true });
+		}
+		updateStatusDisplay() {
+			if (!this.statusContainer) return;
+			if (this.isLoading) this.statusContainer.innerHTML = `
         <div class="br34-autopager-loading">
           <div class="br34-spinner"></div>
           <span>ACQUIRING SECTOR // PAGE ${this.currentPage + 1}...</span>
         </div>
       `;
-      } else if (!this.nextUrl) {
-        this.statusContainer.innerHTML = `
+			else if (!this.nextUrl) this.statusContainer.innerHTML = `
         <div class="br34-autopager-end">
           [ ARCHIVE EXHAUSTED // ${this.seenCardIds.size} UNITS INDEXED ]
         </div>
       `;
-      } else {
-        this.statusContainer.innerHTML = "";
-      }
-    }
-    async loadNextPage() {
-      var _a, _b;
-      if (this.isLoading || !this.nextUrl) return;
-      this.container = findVideosContainer();
-      if (!this.container) return;
-      this.isLoading = true;
-      this.updateStatusDisplay();
-      const fetchUrl = this.nextUrl;
-      let hasError = false;
-      try {
-        const response = await fetch(fetchUrl, {
-          credentials: "include",
-          headers: {
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-          }
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status} fetching ${fetchUrl}`);
-        }
-        const htmlText = await response.text();
-        const doc = new DOMParser().parseFromString(htmlText, "text/html");
-        cleanAds(doc);
-        const newCardElements = Array.from(doc.querySelectorAll(".thumbs .item.thumb, .item.thumb"));
-        const cardsToAppend = [];
-        for (const card of newCardElements) {
-          if (isAdCard(card)) continue;
-          const anchor = card.querySelector('a[href*="/video/"]');
-          const href = (anchor == null ? void 0 : anchor.getAttribute("href")) || "";
-          const id = card.dataset.videoCardId || href;
-          if (id && this.seenCardIds.has(id)) continue;
-          if (id) this.seenCardIds.add(id);
-          if (anchor) hardenAnchor(anchor);
-          const img = card.querySelector("img");
-          if (img) {
-            const webp = img.getAttribute("data-webp") || img.dataset.webp;
-            const original = img.getAttribute("data-original") || img.dataset.original;
-            const resolvedSrc = webp || original;
-            if (resolvedSrc) {
-              img.src = resolvedSrc;
-            }
-            img.removeAttribute("data-original");
-            img.removeAttribute("data-webp");
-            img.classList.remove("lazy-load");
-            img.loading = "lazy";
-          }
-          cardsToAppend.push(card);
-        }
-        if (cardsToAppend.length > 0) {
-          this.isAppending = true;
-          try {
-            const sep = document.createElement("div");
-            sep.className = "br34-page-sep";
-            sep.dataset.page = String(this.currentPage + 1);
-            sep.textContent = `[ PAGE ${this.currentPage + 1} ]`;
-            this.container.append(sep, ...cardsToAppend);
-          } finally {
-            setTimeout(() => {
-              this.isAppending = false;
-            }, 50);
-          }
-          this.onNewCards(cardsToAppend);
-        }
-        this.currentPage++;
-        this.lastPageUrl = fetchUrl;
-        (_a = this.onPageLoaded) == null ? void 0 : _a.call(this, this.currentPage);
-        const parsed = parseNextLink(doc, fetchUrl);
-        this.nextUrl = null;
-        if (parsed.url) {
-          this.nextUrl = parsed.url;
-        } else if (parsed.fromParam !== null && !isNaN(parsed.fromParam)) {
-          this.nextUrl = this.computeNextPageUrlFromCurrent(fetchUrl, parsed.fromParam);
-        }
-        if (!this.nextUrl && cardsToAppend.length > 0) {
-          try {
-            if (!new URL(fetchUrl).pathname.includes("/search/")) {
-              this.nextUrl = this.computeNextPageUrlFromCurrent(fetchUrl, this.currentPage + 1);
-            }
-          } catch {
-            this.nextUrl = null;
-          }
-        }
-      } catch (err) {
-        hasError = true;
-        console.error("[Better Rule34] AutoPager error:", err);
-        if (this.statusContainer) {
-          this.statusContainer.innerHTML = `
+			else this.statusContainer.innerHTML = "";
+		}
+		async loadNextPage() {
+			if (this.isLoading || !this.nextUrl) return;
+			this.container = findVideosContainer();
+			if (!this.container) return;
+			this.isLoading = true;
+			this.updateStatusDisplay();
+			const fetchUrl = this.nextUrl;
+			let hasError = false;
+			try {
+				const response = await fetch(fetchUrl, {
+					credentials: "include",
+					headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+				});
+				if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${fetchUrl}`);
+				const htmlText = await response.text();
+				const doc = new DOMParser().parseFromString(htmlText, "text/html");
+				cleanAds(doc);
+				const newCardElements = Array.from(doc.querySelectorAll(".thumbs .item.thumb, .item.thumb"));
+				const cardsToAppend = [];
+				for (const card of newCardElements) {
+					if (isAdCard(card)) continue;
+					const anchor = card.querySelector("a[href*=\"/video/\"]");
+					const href = anchor?.getAttribute("href") || "";
+					const id = card.dataset.videoCardId || href;
+					if (id && this.seenCardIds.has(id)) continue;
+					if (id) this.seenCardIds.add(id);
+					if (anchor) hardenAnchor(anchor);
+					const img = card.querySelector("img");
+					if (img) {
+						const webp = img.getAttribute("data-webp") || img.dataset.webp;
+						const original = img.getAttribute("data-original") || img.dataset.original;
+						const resolvedSrc = webp || original;
+						if (resolvedSrc) img.src = resolvedSrc;
+						img.removeAttribute("data-original");
+						img.removeAttribute("data-webp");
+						img.classList.remove("lazy-load");
+						img.loading = "lazy";
+					}
+					cardsToAppend.push(card);
+				}
+				if (cardsToAppend.length > 0) {
+					this.isAppending = true;
+					try {
+						const sep = document.createElement("div");
+						sep.className = "br34-page-sep";
+						sep.dataset.page = String(this.currentPage + 1);
+						sep.textContent = `[ PAGE ${this.currentPage + 1} ]`;
+						this.container.append(sep, ...cardsToAppend);
+					} finally {
+						setTimeout(() => {
+							this.isAppending = false;
+						}, 50);
+					}
+					this.onNewCards(cardsToAppend);
+				}
+				this.currentPage++;
+				this.lastPageUrl = fetchUrl;
+				this.onPageLoaded?.(this.currentPage);
+				const parsed = parseNextLink(doc, fetchUrl);
+				this.nextUrl = null;
+				if (parsed.url) this.nextUrl = parsed.url;
+				else if (parsed.fromParam !== null && !isNaN(parsed.fromParam)) this.nextUrl = this.computeNextPageUrlFromCurrent(fetchUrl, parsed.fromParam);
+				if (!this.nextUrl && cardsToAppend.length > 0) try {
+					if (!new URL(fetchUrl).pathname.includes("/search/")) this.nextUrl = this.computeNextPageUrlFromCurrent(fetchUrl, this.currentPage + 1);
+				} catch {
+					this.nextUrl = null;
+				}
+			} catch (err) {
+				hasError = true;
+				console.error("[Better Rule34] AutoPager error:", err);
+				if (this.statusContainer) {
+					this.statusContainer.innerHTML = `
           <div class="br34-autopager-end" style="border-color: #ff0055; color: #ff0055;">
             [ ERROR FETCHING SECTOR // <button type="button" class="br34-load-more-btn" style="padding: 4px 10px; font-size: 10px; margin-left: 6px;">RETRY</button> ]
           </div>
         `;
-          (_b = this.statusContainer.querySelector("button")) == null ? void 0 : _b.addEventListener("click", () => {
-            void this.loadNextPage();
-          });
-        }
-      } finally {
-        this.isLoading = false;
-        if (!hasError) {
-          this.updateStatusDisplay();
-        }
-        unclipBodyOverflow();
-      }
-    }
-    destroy() {
-      var _a, _b, _c;
-      if (this.scrollHandler) {
-        window.removeEventListener("scroll", this.scrollHandler);
-        window.removeEventListener("touchmove", this.scrollHandler);
-        window.removeEventListener("resize", this.scrollHandler);
-        this.scrollHandler = null;
-      }
-      (_a = this.observer) == null ? void 0 : _a.disconnect();
-      this.observer = null;
-      (_b = this.statusContainer) == null ? void 0 : _b.remove();
-      (_c = this.sentinel) == null ? void 0 : _c.remove();
-      this.statusContainer = null;
-      this.sentinel = null;
-    }
-  }
-  const BOOKMARK_KEY = "better_rule34_bookmarks_v1";
-  function canonicalListKey(urlStr) {
-    try {
-      const url = new URL(urlStr);
-      for (const k of [...url.searchParams.keys()]) {
-        if (/^from|^page$|^p$/i.test(k)) {
-          url.searchParams.delete(k);
-        }
-      }
-      let pathname = url.pathname;
-      if (!pathname || pathname === "/") {
-        pathname = "/latest-updates/";
-      }
-      const entityMatch = /^\/((?:tags|categories|models|channels|playlists)\/[^/]+)\/(\d+)\/?$/.exec(pathname);
-      if (entityMatch) {
-        pathname = `/${entityMatch[1]}/`;
-      } else {
-        const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
-        if (catalogMatch && !["tags", "categories", "models", "channels", "playlists"].includes(catalogMatch[1])) {
-          pathname = `/${catalogMatch[1]}/`;
-        }
-      }
-      if (pathname.length > 1 && !pathname.endsWith("/")) {
-        pathname += "/";
-      }
-      const params = [...url.searchParams.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
-      const qs = params.map(([k, v]) => `${k}=${v}`).join("&");
-      return qs ? `${pathname}?${qs}` : pathname;
-    } catch {
-      return urlStr;
-    }
-  }
-  function resolveStore(store) {
-    try {
-      if (typeof localStorage !== "undefined") return localStorage;
-    } catch {
-    }
-    return null;
-  }
-  function readAll(store) {
-    const s = resolveStore();
-    if (!s) return {};
-    try {
-      const raw = s.getItem(BOOKMARK_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object") return {};
-      return parsed;
-    } catch {
-      return {};
-    }
-  }
-  function getBookmark(key, store) {
-    if (!key) return null;
-    const bm = readAll()[key];
-    if (!bm || typeof bm.page !== "number" || typeof bm.url !== "string" || !bm.url) return null;
-    return bm;
-  }
-  function setBookmark(key, bm, store) {
-    const s = resolveStore();
-    if (!s || !key || !bm.url || bm.page < 1) return;
-    try {
-      const all = readAll(store);
-      all[key] = { page: bm.page, url: bm.url };
-      s.setItem(BOOKMARK_KEY, JSON.stringify(all));
-    } catch {
-    }
-  }
-  function clearBookmark(key, store) {
-    const s = resolveStore();
-    if (!s || !key) return;
-    try {
-      const all = readAll(store);
-      if (all[key]) {
-        delete all[key];
-        s.setItem(BOOKMARK_KEY, JSON.stringify(all));
-      }
-    } catch {
-    }
-  }
-  const BOOKMARK_SVG = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z"/></svg>`;
-  function refreshButton(btn, bm, curPage = 1) {
-    btn.classList.toggle("saved", Boolean(bm));
-    if (!bm) {
-      btn.title = `Bookmark page ${curPage} — click: save`;
-    } else if (curPage < bm.page) {
-      btn.title = `Bookmark at p.${bm.page} — click: jump to p.${bm.page}, right-click: remove`;
-    } else if (curPage > bm.page) {
-      btn.title = `Current p.${curPage} (saved p.${bm.page}) — click: update to p.${curPage}, right-click: remove`;
-    } else {
-      btn.title = `Bookmarked at p.${bm.page} — click: remove, right-click: remove`;
-    }
-    btn.setAttribute("aria-label", btn.title);
-  }
-  function mountBookmarkButton(opts) {
-    let dock = document.querySelector(".br34-dock");
-    if (!dock) {
-      dock = document.createElement("div");
-      dock.className = "br34-dock";
-      document.body.append(dock);
-    }
-    dock.append(opts.fab);
-    let btn = dock.querySelector(".br34-bookmark-btn");
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "br34-bookmark-btn";
-      btn.innerHTML = BOOKMARK_SVG;
-      dock.prepend(btn);
-    }
-    const button = btn;
-    const updateState = () => {
-      refreshButton(button, getBookmark(opts.listKey), opts.getPage());
-    };
-    updateState();
-    if (button.dataset.br34Wired === "true") {
-      return {
-        cleanup: () => {
-        },
-        refresh: updateState
-      };
-    }
-    button.dataset.br34Wired = "true";
-    const onClick = () => {
-      const existing = getBookmark(opts.listKey);
-      const curPage = opts.getPage();
-      const curUrl = opts.getUrl();
-      if (!existing) {
-        setBookmark(opts.listKey, { page: curPage, url: curUrl });
-        updateState();
-        return;
-      }
-      if (curPage < existing.page) {
-        window.location.href = existing.url;
-      } else if (curPage > existing.page) {
-        setBookmark(opts.listKey, { page: curPage, url: curUrl });
-        updateState();
-      } else {
-        clearBookmark(opts.listKey);
-        updateState();
-      }
-    };
-    const onContextMenu = (e) => {
-      e.preventDefault();
-      clearBookmark(opts.listKey);
-      updateState();
-    };
-    button.addEventListener("click", onClick);
-    button.addEventListener("contextmenu", onContextMenu);
-    const cleanup = () => {
-      button.removeEventListener("click", onClick);
-      button.removeEventListener("contextmenu", onContextMenu);
-      button.remove();
-      delete button.dataset.br34Wired;
-    };
-    return {
-      cleanup,
-      refresh: updateState
-    };
-  }
-  const STORAGE_KEY = "better_rule34_settings";
-  const VIEWS_STEPS = [0, 1e3, 5e3, 1e4, 25e3, 5e4, 1e5];
-  class FilterBar {
-    constructor(callbacks) {
-      __publicField(this, "state");
-      __publicField(this, "callbacks");
-      __publicField(this, "fabElement");
-      __publicField(this, "panelElement");
-      __publicField(this, "isOpen", false);
-      __publicField(this, "outsideClickHandler", null);
-      __publicField(this, "sliderDebounce", 0);
-      this.callbacks = callbacks;
-      this.state = this.loadInitialState();
-      this.fabElement = this.buildFab();
-      this.panelElement = this.buildPanel();
-      const searchInput = this.panelElement.querySelector(".br34-search-input");
-      if (searchInput) searchInput.value = this.state.query;
-      this.mount();
-    }
-    loadInitialState() {
-      const urlFilters = parseCurrentUrlFilters(window.location.href);
-      let savedSettings = {};
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) savedSettings = JSON.parse(raw);
-      } catch {
-      }
-      return {
-        ...DEFAULT_FILTER,
-        ...savedSettings,
-        ...urlFilters
-      };
-    }
-    saveSettings() {
-      try {
-        const toSave = {
-          soundOnly: this.state.soundOnly,
-          hdOnly: this.state.hdOnly,
-          futaFilter: this.state.futaFilter,
-          hideWatched: this.state.hideWatched,
-          minRating: this.state.minRating,
-          minViews: this.state.minViews,
-          minYear: this.state.minYear,
-          durationMinSeconds: this.state.durationMinSeconds
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-      } catch {
-      }
-    }
-    getState() {
-      return this.state;
-    }
-    mount() {
-      document.body.append(this.fabElement, this.panelElement);
-      this.bindEvents();
-      this.updateBadge();
-    }
-    countActiveFilters() {
-      let count = 0;
-      if (this.state.query.trim()) count++;
-      if (this.state.soundOnly) count++;
-      if (this.state.hdOnly) count++;
-      if (this.state.futaFilter !== "all") count++;
-      if (this.state.hideWatched) count++;
-      if (this.state.minRating > 0) count++;
-      if (this.state.minViews > 0) count++;
-      if (this.state.minYear > BASE_YEAR) count++;
-      if (this.state.durationMinSeconds !== null && this.state.durationMinSeconds > 0) count++;
-      return count;
-    }
-    updateBadge() {
-      const count = this.countActiveFilters();
-      let badge = this.fabElement.querySelector(".br34-fab-badge");
-      if (count > 0) {
-        if (!badge) {
-          badge = document.createElement("span");
-          badge.className = "br34-fab-badge";
-          this.fabElement.append(badge);
-        }
-        badge.textContent = `[${count}]`;
-      } else {
-        badge == null ? void 0 : badge.remove();
-      }
-    }
-    setCount(visible, total) {
-      const counter = this.panelElement.querySelector(".br34-title-sub");
-      if (counter) {
-        counter.textContent = `UNITS: ${visible} / ${total}`;
-      }
-    }
-    buildFab() {
-      const fab = document.createElement("button");
-      fab.type = "button";
-      fab.className = "br34-fab";
-      fab.title = "Open EROS Telemetry Filter";
-      fab.setAttribute("aria-label", "Open EROS Telemetry Filter");
-      fab.innerHTML = `
+					this.statusContainer.querySelector("button")?.addEventListener("click", () => {
+						this.loadNextPage();
+					});
+				}
+			} finally {
+				this.isLoading = false;
+				if (!hasError) this.updateStatusDisplay();
+				unclipBodyOverflow();
+			}
+		}
+		destroy() {
+			if (this.scrollHandler) {
+				window.removeEventListener("scroll", this.scrollHandler);
+				window.removeEventListener("touchmove", this.scrollHandler);
+				window.removeEventListener("resize", this.scrollHandler);
+				this.scrollHandler = null;
+			}
+			this.observer?.disconnect();
+			this.observer = null;
+			this.statusContainer?.remove();
+			this.sentinel?.remove();
+			this.statusContainer = null;
+			this.sentinel = null;
+		}
+	};
+	var BOOKMARK_KEY = "better_rule34_bookmarks_v1";
+	function canonicalListKey(urlStr) {
+		try {
+			const url = new URL(urlStr);
+			for (const k of [...url.searchParams.keys()]) if (isPaginationKey(k)) url.searchParams.delete(k);
+			let pathname = url.pathname;
+			if (!pathname || pathname === "/") pathname = "/latest-updates/";
+			else pathname = stripPageSegment(pathname);
+			if (pathname.length > 1 && !pathname.endsWith("/")) pathname += "/";
+			const qs = [...url.searchParams.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${k}=${v}`).join("&");
+			return qs ? `${pathname}?${qs}` : pathname;
+		} catch {
+			return urlStr;
+		}
+	}
+	function resolveStore$1(store) {
+		if (store) return store;
+		try {
+			if (typeof localStorage !== "undefined") return localStorage;
+		} catch {}
+		return null;
+	}
+	function readAll(store) {
+		const s = resolveStore$1(store);
+		if (!s) return {};
+		try {
+			const raw = s.getItem(BOOKMARK_KEY);
+			if (!raw) return {};
+			const parsed = JSON.parse(raw);
+			if (!parsed || typeof parsed !== "object") return {};
+			return parsed;
+		} catch {
+			return {};
+		}
+	}
+	function getBookmark(key, store) {
+		if (!key) return null;
+		const bm = readAll(store)[key];
+		if (!bm || typeof bm.page !== "number" || typeof bm.url !== "string" || !bm.url) return null;
+		return bm;
+	}
+	function setBookmark(key, bm, store) {
+		const s = resolveStore$1(store);
+		if (!s || !key || !bm.url || bm.page < 1) return;
+		try {
+			const all = readAll(store);
+			all[key] = {
+				page: bm.page,
+				url: bm.url
+			};
+			s.setItem(BOOKMARK_KEY, JSON.stringify(all));
+		} catch {}
+	}
+	function clearBookmark(key, store) {
+		const s = resolveStore$1(store);
+		if (!s || !key) return;
+		try {
+			const all = readAll(store);
+			if (all[key]) {
+				delete all[key];
+				s.setItem(BOOKMARK_KEY, JSON.stringify(all));
+			}
+		} catch {}
+	}
+	var BOOKMARK_SVG = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3z"/></svg>`;
+	function refreshButton(btn, bm, curPage = 1) {
+		btn.classList.toggle("saved", Boolean(bm));
+		if (!bm) btn.title = `Bookmark page ${curPage} — click: save`;
+		else if (curPage < bm.page) btn.title = `Bookmark at p.${bm.page} — click: jump to p.${bm.page}, right-click: remove`;
+		else if (curPage > bm.page) btn.title = `Current p.${curPage} (saved p.${bm.page}) — click: update to p.${curPage}, right-click: remove`;
+		else btn.title = `Bookmarked at p.${bm.page} — click: remove, right-click: remove`;
+		btn.setAttribute("aria-label", btn.title);
+	}
+	function mountBookmarkButton(opts) {
+		let dock = document.querySelector(".br34-dock");
+		if (!dock) {
+			dock = document.createElement("div");
+			dock.className = "br34-dock";
+			document.body.append(dock);
+		}
+		dock.append(opts.fab);
+		let btn = dock.querySelector(".br34-bookmark-btn");
+		if (!btn) {
+			btn = document.createElement("button");
+			btn.type = "button";
+			btn.className = "br34-bookmark-btn";
+			btn.innerHTML = BOOKMARK_SVG;
+			dock.prepend(btn);
+		}
+		const button = btn;
+		const updateState = () => {
+			refreshButton(button, getBookmark(opts.listKey), opts.getPage());
+		};
+		updateState();
+		if (button.dataset.br34Wired === "true") return {
+			cleanup: () => {},
+			refresh: updateState
+		};
+		button.dataset.br34Wired = "true";
+		const onClick = () => {
+			const existing = getBookmark(opts.listKey);
+			const curPage = opts.getPage();
+			const curUrl = opts.getUrl();
+			if (!existing) {
+				setBookmark(opts.listKey, {
+					page: curPage,
+					url: curUrl
+				});
+				updateState();
+				return;
+			}
+			if (curPage < existing.page) window.location.href = existing.url;
+			else if (curPage > existing.page) {
+				setBookmark(opts.listKey, {
+					page: curPage,
+					url: curUrl
+				});
+				updateState();
+			} else {
+				clearBookmark(opts.listKey);
+				updateState();
+			}
+		};
+		const onContextMenu = (e) => {
+			e.preventDefault();
+			clearBookmark(opts.listKey);
+			updateState();
+		};
+		button.addEventListener("click", onClick);
+		button.addEventListener("contextmenu", onContextMenu);
+		const cleanup = () => {
+			button.removeEventListener("click", onClick);
+			button.removeEventListener("contextmenu", onContextMenu);
+			button.remove();
+			delete button.dataset.br34Wired;
+		};
+		return {
+			cleanup,
+			refresh: updateState
+		};
+	}
+	var STORAGE_KEY = "better_rule34_settings";
+	var VIEWS_STEPS = [
+		0,
+		1e3,
+		5e3,
+		1e4,
+		25e3,
+		5e4,
+		1e5
+	];
+	var DEBOUNCE_MS = 80;
+	var FilterBar = class {
+		state;
+		callbacks;
+		fabElement;
+		panelElement;
+		isOpen = false;
+		outsideClickHandler = null;
+		sliderDebounce = 0;
+		constructor(callbacks) {
+			this.callbacks = callbacks;
+			this.state = this.loadInitialState();
+			this.fabElement = this.buildFab();
+			this.panelElement = this.buildPanel();
+			const searchInput = this.panelElement.querySelector(".br34-search-input");
+			if (searchInput) searchInput.value = this.state.query;
+			this.mount();
+		}
+		loadInitialState() {
+			const urlFilters = parseCurrentUrlFilters(window.location.href);
+			let savedSettings = {};
+			try {
+				const raw = localStorage.getItem(STORAGE_KEY);
+				if (raw) savedSettings = JSON.parse(raw);
+			} catch {}
+			return {
+				...DEFAULT_FILTER,
+				...savedSettings,
+				...urlFilters
+			};
+		}
+		saveSettings() {
+			try {
+				const toSave = {
+					soundOnly: this.state.soundOnly,
+					hdOnly: this.state.hdOnly,
+					futaFilter: this.state.futaFilter,
+					hideWatched: this.state.hideWatched,
+					minRating: this.state.minRating,
+					minViews: this.state.minViews,
+					minYear: this.state.minYear,
+					durationMinSeconds: this.state.durationMinSeconds
+				};
+				localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+			} catch {}
+		}
+		getState() {
+			return this.state;
+		}
+		mount() {
+			document.body.append(this.fabElement, this.panelElement);
+			this.bindEvents();
+			this.updateBadge();
+		}
+		countActiveFilters() {
+			let count = 0;
+			if (this.state.query.trim()) count++;
+			if (this.state.soundOnly) count++;
+			if (this.state.hdOnly) count++;
+			if (this.state.futaFilter !== "all") count++;
+			if (this.state.hideWatched) count++;
+			if (this.state.minRating > 0) count++;
+			if (this.state.minViews > 0) count++;
+			if (this.state.minYear > 2018) count++;
+			if (this.state.durationMinSeconds !== null && this.state.durationMinSeconds > 0) count++;
+			return count;
+		}
+		updateBadge() {
+			const count = this.countActiveFilters();
+			let badge = this.fabElement.querySelector(".br34-fab-badge");
+			if (count > 0) {
+				if (!badge) {
+					badge = document.createElement("span");
+					badge.className = "br34-fab-badge";
+					this.fabElement.append(badge);
+				}
+				badge.textContent = `[${count}]`;
+			} else badge?.remove();
+		}
+		setCount(visible, total) {
+			const counter = this.panelElement.querySelector(".br34-title-sub");
+			if (counter) counter.textContent = `UNITS: ${visible} / ${total}`;
+		}
+		buildFab() {
+			const fab = document.createElement("button");
+			fab.type = "button";
+			fab.className = "br34-fab";
+			fab.title = "Open EROS Telemetry Filter";
+			fab.setAttribute("aria-label", "Open EROS Telemetry Filter");
+			fab.innerHTML = `
       <span class="br34-fab-dot"></span>
       <span>CTRL</span>
     `;
-      return fab;
-    }
-    buildPanel() {
-      const panel = document.createElement("div");
-      panel.className = "br34-panel";
-      const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-      const durMins = this.state.durationMinSeconds ? Math.round(this.state.durationMinSeconds / 60) : 0;
-      panel.innerHTML = `
+			return fab;
+		}
+		buildPanel() {
+			const panel = document.createElement("div");
+			panel.className = "br34-panel";
+			const currentYear = new Date().getFullYear();
+			const durMins = this.state.durationMinSeconds ? Math.round(this.state.durationMinSeconds / 60) : 0;
+			panel.innerHTML = `
       <!-- Header: Title, Units & Close -->
       <div class="br34-panel-header">
         <div class="br34-title-row">
@@ -1030,7 +964,7 @@
               <span>MIN VIEWS</span>
               <span class="br34-sect-val" id="br34-val-views">${this.formatViewsLabel(this.state.minViews)}</span>
             </div>
-            <input type="range" class="br34-range-slider" id="br34-slider-views" min="0" max="6" step="1" value="${this.viewsToSliderStep(this.state.minViews)}" />
+            <input type="range" class="br34-range-slider" id="br34-slider-views" min="0" max="6" step="1" value="${viewsToNearestStep(this.state.minViews, VIEWS_STEPS)}" />
           </div>
 
           <!-- 3. Duration Slider -->
@@ -1046,7 +980,7 @@
           <div class="br34-slider-card">
             <div class="br34-sect-title">
               <span>MIN VINTAGE</span>
-              <span class="br34-sect-val" id="br34-val-year">${this.state.minYear > BASE_YEAR ? `≥ ${this.state.minYear}` : "ALL"}</span>
+              <span class="br34-sect-val" id="br34-val-year">${this.state.minYear > 2018 ? `≥ ${this.state.minYear}` : "ALL"}</span>
             </div>
             <input type="range" class="br34-range-slider" id="br34-slider-year" min="${BASE_YEAR}" max="${currentYear}" step="1" value="${this.state.minYear}" />
           </div>
@@ -1076,201 +1010,246 @@
         </button>
       </div>
     `;
-      return panel;
-    }
-    viewsToSliderStep(views) {
-      return viewsToNearestStep(views, VIEWS_STEPS);
-    }
-    formatViewsLabel(views) {
-      if (views <= 0) return "ANY";
-      if (views >= 1e6) return `≥ ${views / 1e6}M`;
-      if (views >= 1e3) return `≥ ${views / 1e3}K`;
-      return `≥ ${views}`;
-    }
-    getFutaLabel() {
-      switch (this.state.futaFilter) {
-        case "hide":
-          return "NO FUTA";
-        case "only":
-          return "FUTA ONLY";
-        case "all":
-        default:
-          return "FUTA: ALL";
-      }
-    }
-    cycleFuta() {
-      if (this.state.futaFilter === "all") this.state.futaFilter = "hide";
-      else if (this.state.futaFilter === "hide") this.state.futaFilter = "only";
-      else this.state.futaFilter = "all";
-      const btn = this.panelElement.querySelector('[data-toggle="futa"]');
-      if (btn) {
-        btn.textContent = this.getFutaLabel();
-        btn.classList.toggle("active-purple", this.state.futaFilter !== "all");
-      }
-      this.saveSettings();
-      this.updateBadge();
-      this.callbacks.onFilterChange(this.state);
-    }
-    togglePanel(open) {
-      this.isOpen = open !== void 0 ? open : !this.isOpen;
-      this.panelElement.classList.toggle("open", this.isOpen);
-      this.fabElement.classList.toggle("active", this.isOpen);
-    }
-    commitSliderChange() {
-      window.clearTimeout(this.sliderDebounce);
-      this.sliderDebounce = window.setTimeout(() => {
-        this.saveSettings();
-        this.updateBadge();
-        this.callbacks.onFilterChange(this.state);
-      }, 80);
-    }
-    bindEvents() {
-      var _a, _b;
-      this.fabElement.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.togglePanel();
-      });
-      (_a = this.panelElement.querySelector(".br34-panel-close")) == null ? void 0 : _a.addEventListener("click", () => {
-        this.togglePanel(false);
-      });
-      this.outsideClickHandler = (e) => {
-        if (this.isOpen && !this.panelElement.contains(e.target) && !this.fabElement.contains(e.target)) {
-          this.togglePanel(false);
-        }
-      };
-      document.addEventListener("click", this.outsideClickHandler);
-      let searchDebounce = 0;
-      const searchInput = this.panelElement.querySelector(".br34-search-input");
-      searchInput == null ? void 0 : searchInput.addEventListener("input", () => {
-        window.clearTimeout(searchDebounce);
-        searchDebounce = window.setTimeout(() => {
-          this.state.query = searchInput.value;
-          this.updateBadge();
-          this.callbacks.onFilterChange(this.state);
-        }, 80);
-      });
-      const ratingSlider = this.panelElement.querySelector("#br34-slider-rating");
-      const ratingVal = this.panelElement.querySelector("#br34-val-rating");
-      ratingSlider == null ? void 0 : ratingSlider.addEventListener("input", () => {
-        const val = parseInt(ratingSlider.value, 10);
-        this.state.minRating = val;
-        if (ratingVal) {
-          ratingVal.textContent = val > 0 ? `≥ ${val}%` : "ANY";
-        }
-        this.commitSliderChange();
-      });
-      const viewsSlider = this.panelElement.querySelector("#br34-slider-views");
-      const viewsVal = this.panelElement.querySelector("#br34-val-views");
-      viewsSlider == null ? void 0 : viewsSlider.addEventListener("input", () => {
-        const step = parseInt(viewsSlider.value, 10);
-        const val = VIEWS_STEPS[step] || 0;
-        this.state.minViews = val;
-        if (viewsVal) {
-          viewsVal.textContent = this.formatViewsLabel(val);
-        }
-        this.commitSliderChange();
-      });
-      const durSlider = this.panelElement.querySelector("#br34-slider-dur");
-      const durVal = this.panelElement.querySelector("#br34-val-dur");
-      durSlider == null ? void 0 : durSlider.addEventListener("input", () => {
-        const mins = parseInt(durSlider.value, 10);
-        this.state.durationMinSeconds = mins > 0 ? mins * 60 : null;
-        if (durVal) {
-          durVal.textContent = mins > 0 ? `≥ ${mins}M` : "ANY";
-        }
-        this.commitSliderChange();
-      });
-      const yearSlider = this.panelElement.querySelector("#br34-slider-year");
-      const yearVal = this.panelElement.querySelector("#br34-val-year");
-      yearSlider == null ? void 0 : yearSlider.addEventListener("input", () => {
-        const yr = parseInt(yearSlider.value, 10);
-        this.state.minYear = yr;
-        if (yearVal) {
-          yearVal.textContent = yr > BASE_YEAR ? `≥ ${yr}` : "ALL";
-        }
-        this.commitSliderChange();
-      });
-      const soundBtn = this.panelElement.querySelector('[data-toggle="sound"]');
-      soundBtn == null ? void 0 : soundBtn.addEventListener("click", () => {
-        this.state.soundOnly = !this.state.soundOnly;
-        soundBtn.classList.toggle("active", this.state.soundOnly);
-        this.saveSettings();
-        this.updateBadge();
-        this.callbacks.onFilterChange(this.state);
-      });
-      const hdBtn = this.panelElement.querySelector('[data-toggle="hd"]');
-      hdBtn == null ? void 0 : hdBtn.addEventListener("click", () => {
-        this.state.hdOnly = !this.state.hdOnly;
-        hdBtn.classList.toggle("active", this.state.hdOnly);
-        this.saveSettings();
-        this.updateBadge();
-        this.callbacks.onFilterChange(this.state);
-      });
-      const futaBtn = this.panelElement.querySelector('[data-toggle="futa"]');
-      futaBtn == null ? void 0 : futaBtn.addEventListener("click", () => {
-        this.cycleFuta();
-      });
-      const watchedBtn = this.panelElement.querySelector('[data-toggle="watched"]');
-      watchedBtn == null ? void 0 : watchedBtn.addEventListener("click", () => {
-        this.state.hideWatched = !this.state.hideWatched;
-        watchedBtn.classList.toggle("active", this.state.hideWatched);
-        this.saveSettings();
-        this.updateBadge();
-        this.callbacks.onFilterChange(this.state);
-      });
-      (_b = this.panelElement.querySelector("#br34-btn-reset")) == null ? void 0 : _b.addEventListener("click", () => {
-        this.state = {
-          ...DEFAULT_FILTER
-        };
-        this.saveSettings();
-        this.syncInputsWithState();
-        this.updateBadge();
-        this.callbacks.onFilterChange(this.state);
-      });
-    }
-    syncInputsWithState() {
-      const searchInput = this.panelElement.querySelector(".br34-search-input");
-      if (searchInput) searchInput.value = this.state.query;
-      const ratingSlider = this.panelElement.querySelector("#br34-slider-rating");
-      const ratingVal = this.panelElement.querySelector("#br34-val-rating");
-      if (ratingSlider) ratingSlider.value = String(this.state.minRating);
-      if (ratingVal) ratingVal.textContent = this.state.minRating > 0 ? `≥ ${this.state.minRating}%` : "ANY";
-      const viewsSlider = this.panelElement.querySelector("#br34-slider-views");
-      const viewsVal = this.panelElement.querySelector("#br34-val-views");
-      if (viewsSlider) viewsSlider.value = String(this.viewsToSliderStep(this.state.minViews));
-      if (viewsVal) viewsVal.textContent = this.formatViewsLabel(this.state.minViews);
-      const durSlider = this.panelElement.querySelector("#br34-slider-dur");
-      const durVal = this.panelElement.querySelector("#br34-val-dur");
-      const durMins = this.state.durationMinSeconds ? Math.round(this.state.durationMinSeconds / 60) : 0;
-      if (durSlider) durSlider.value = String(durMins);
-      if (durVal) durVal.textContent = durMins > 0 ? `≥ ${durMins}M` : "ANY";
-      const yearSlider = this.panelElement.querySelector("#br34-slider-year");
-      const yearVal = this.panelElement.querySelector("#br34-val-year");
-      if (yearSlider) yearSlider.value = String(this.state.minYear);
-      if (yearVal) yearVal.textContent = this.state.minYear > BASE_YEAR ? `≥ ${this.state.minYear}` : "ALL";
-      const soundBtn = this.panelElement.querySelector('[data-toggle="sound"]');
-      soundBtn == null ? void 0 : soundBtn.classList.toggle("active", this.state.soundOnly);
-      const hdBtn = this.panelElement.querySelector('[data-toggle="hd"]');
-      hdBtn == null ? void 0 : hdBtn.classList.toggle("active", this.state.hdOnly);
-      const futaBtn = this.panelElement.querySelector('[data-toggle="futa"]');
-      if (futaBtn) {
-        futaBtn.textContent = this.getFutaLabel();
-        futaBtn.classList.toggle("active-purple", this.state.futaFilter !== "all");
-      }
-      const watchedBtn = this.panelElement.querySelector('[data-toggle="watched"]');
-      watchedBtn == null ? void 0 : watchedBtn.classList.toggle("active", this.state.hideWatched);
-    }
-    destroy() {
-      if (this.outsideClickHandler) {
-        document.removeEventListener("click", this.outsideClickHandler);
-        this.outsideClickHandler = null;
-      }
-      window.clearTimeout(this.sliderDebounce);
-      this.fabElement.remove();
-      this.panelElement.remove();
-    }
-  }
-  const CSS = `
+			return panel;
+		}
+		formatViewsLabel(views) {
+			if (views <= 0) return "ANY";
+			if (views >= 1e6) return `≥ ${views / 1e6}M`;
+			if (views >= 1e3) return `≥ ${views / 1e3}K`;
+			return `≥ ${views}`;
+		}
+		getFutaLabel() {
+			switch (this.state.futaFilter) {
+				case "hide": return "NO FUTA";
+				case "only": return "FUTA ONLY";
+				default: return "FUTA: ALL";
+			}
+		}
+		cycleFuta() {
+			if (this.state.futaFilter === "all") this.state.futaFilter = "hide";
+			else if (this.state.futaFilter === "hide") this.state.futaFilter = "only";
+			else this.state.futaFilter = "all";
+			const btn = this.panelElement.querySelector("[data-toggle=\"futa\"]");
+			if (btn) {
+				btn.textContent = this.getFutaLabel();
+				btn.classList.toggle("active-purple", this.state.futaFilter !== "all");
+			}
+			this.saveSettings();
+			this.updateBadge();
+			this.callbacks.onFilterChange(this.state);
+		}
+		togglePanel(open) {
+			this.isOpen = open !== void 0 ? open : !this.isOpen;
+			this.panelElement.classList.toggle("open", this.isOpen);
+			this.fabElement.classList.toggle("active", this.isOpen);
+		}
+		commitSliderChange() {
+			window.clearTimeout(this.sliderDebounce);
+			this.sliderDebounce = window.setTimeout(() => {
+				this.saveSettings();
+				this.updateBadge();
+				this.callbacks.onFilterChange(this.state);
+			}, DEBOUNCE_MS);
+		}
+		bindToggle(selector, isActive, onToggle) {
+			const btn = this.panelElement.querySelector(selector);
+			btn?.addEventListener("click", () => {
+				onToggle();
+				btn.classList.toggle("active", isActive());
+				this.saveSettings();
+				this.updateBadge();
+				this.callbacks.onFilterChange(this.state);
+			});
+		}
+		bindEvents() {
+			this.fabElement.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.togglePanel();
+			});
+			this.panelElement.querySelector(".br34-panel-close")?.addEventListener("click", () => {
+				this.togglePanel(false);
+			});
+			this.outsideClickHandler = (e) => {
+				if (this.isOpen && !this.panelElement.contains(e.target) && !this.fabElement.contains(e.target)) this.togglePanel(false);
+			};
+			document.addEventListener("click", this.outsideClickHandler);
+			let searchDebounce = 0;
+			const searchInput = this.panelElement.querySelector(".br34-search-input");
+			searchInput?.addEventListener("input", () => {
+				window.clearTimeout(searchDebounce);
+				searchDebounce = window.setTimeout(() => {
+					this.state.query = searchInput.value;
+					this.updateBadge();
+					this.callbacks.onFilterChange(this.state);
+				}, DEBOUNCE_MS);
+			});
+			const ratingSlider = this.panelElement.querySelector("#br34-slider-rating");
+			const ratingVal = this.panelElement.querySelector("#br34-val-rating");
+			ratingSlider?.addEventListener("input", () => {
+				const val = parseInt(ratingSlider.value, 10);
+				this.state.minRating = val;
+				if (ratingVal) ratingVal.textContent = val > 0 ? `≥ ${val}%` : "ANY";
+				this.commitSliderChange();
+			});
+			const viewsSlider = this.panelElement.querySelector("#br34-slider-views");
+			const viewsVal = this.panelElement.querySelector("#br34-val-views");
+			viewsSlider?.addEventListener("input", () => {
+				const val = VIEWS_STEPS[parseInt(viewsSlider.value, 10)] || 0;
+				this.state.minViews = val;
+				if (viewsVal) viewsVal.textContent = this.formatViewsLabel(val);
+				this.commitSliderChange();
+			});
+			const durSlider = this.panelElement.querySelector("#br34-slider-dur");
+			const durVal = this.panelElement.querySelector("#br34-val-dur");
+			durSlider?.addEventListener("input", () => {
+				const mins = parseInt(durSlider.value, 10);
+				this.state.durationMinSeconds = mins > 0 ? mins * 60 : null;
+				if (durVal) durVal.textContent = mins > 0 ? `≥ ${mins}M` : "ANY";
+				this.commitSliderChange();
+			});
+			const yearSlider = this.panelElement.querySelector("#br34-slider-year");
+			const yearVal = this.panelElement.querySelector("#br34-val-year");
+			yearSlider?.addEventListener("input", () => {
+				const yr = parseInt(yearSlider.value, 10);
+				this.state.minYear = yr;
+				if (yearVal) yearVal.textContent = yr > 2018 ? `≥ ${yr}` : "ALL";
+				this.commitSliderChange();
+			});
+			this.bindToggle("[data-toggle=\"sound\"]", () => this.state.soundOnly, () => {
+				this.state.soundOnly = !this.state.soundOnly;
+			});
+			this.bindToggle("[data-toggle=\"hd\"]", () => this.state.hdOnly, () => {
+				this.state.hdOnly = !this.state.hdOnly;
+			});
+			this.panelElement.querySelector("[data-toggle=\"futa\"]")?.addEventListener("click", () => {
+				this.cycleFuta();
+			});
+			this.bindToggle("[data-toggle=\"watched\"]", () => this.state.hideWatched, () => {
+				this.state.hideWatched = !this.state.hideWatched;
+			});
+			this.panelElement.querySelector("#br34-btn-reset")?.addEventListener("click", () => {
+				this.state = { ...DEFAULT_FILTER };
+				this.saveSettings();
+				this.syncInputsWithState();
+				this.updateBadge();
+				this.callbacks.onFilterChange(this.state);
+			});
+		}
+		syncInputsWithState() {
+			const searchInput = this.panelElement.querySelector(".br34-search-input");
+			if (searchInput) searchInput.value = this.state.query;
+			const ratingSlider = this.panelElement.querySelector("#br34-slider-rating");
+			const ratingVal = this.panelElement.querySelector("#br34-val-rating");
+			if (ratingSlider) ratingSlider.value = String(this.state.minRating);
+			if (ratingVal) ratingVal.textContent = this.state.minRating > 0 ? `≥ ${this.state.minRating}%` : "ANY";
+			const viewsSlider = this.panelElement.querySelector("#br34-slider-views");
+			const viewsVal = this.panelElement.querySelector("#br34-val-views");
+			if (viewsSlider) viewsSlider.value = String(viewsToNearestStep(this.state.minViews, VIEWS_STEPS));
+			if (viewsVal) viewsVal.textContent = this.formatViewsLabel(this.state.minViews);
+			const durSlider = this.panelElement.querySelector("#br34-slider-dur");
+			const durVal = this.panelElement.querySelector("#br34-val-dur");
+			const durMins = this.state.durationMinSeconds ? Math.round(this.state.durationMinSeconds / 60) : 0;
+			if (durSlider) durSlider.value = String(durMins);
+			if (durVal) durVal.textContent = durMins > 0 ? `≥ ${durMins}M` : "ANY";
+			const yearSlider = this.panelElement.querySelector("#br34-slider-year");
+			const yearVal = this.panelElement.querySelector("#br34-val-year");
+			if (yearSlider) yearSlider.value = String(this.state.minYear);
+			if (yearVal) yearVal.textContent = this.state.minYear > 2018 ? `≥ ${this.state.minYear}` : "ALL";
+			this.panelElement.querySelector("[data-toggle=\"sound\"]")?.classList.toggle("active", this.state.soundOnly);
+			this.panelElement.querySelector("[data-toggle=\"hd\"]")?.classList.toggle("active", this.state.hdOnly);
+			const futaBtn = this.panelElement.querySelector("[data-toggle=\"futa\"]");
+			if (futaBtn) {
+				futaBtn.textContent = this.getFutaLabel();
+				futaBtn.classList.toggle("active-purple", this.state.futaFilter !== "all");
+			}
+			this.panelElement.querySelector("[data-toggle=\"watched\"]")?.classList.toggle("active", this.state.hideWatched);
+		}
+		destroy() {
+			if (this.outsideClickHandler) {
+				document.removeEventListener("click", this.outsideClickHandler);
+				this.outsideClickHandler = null;
+			}
+			window.clearTimeout(this.sliderDebounce);
+			this.fabElement.remove();
+			this.panelElement.remove();
+		}
+	};
+	var COLLAPSE_KEY = "better_rule34_native_filters_collapsed_v1";
+	var TOGGLE_LABEL = "<span>[ SITE FILTERS ]</span>";
+	var TOGGLE_ICON = "<svg class=\"filters-panel__toggle-icon\" viewBox=\"0 0 12 12\" width=\"12\" height=\"12\" aria-hidden=\"true\"><path d=\"M2 4l4 4 4-4\"/></svg>";
+	function resolveStore(store) {
+		if (store) return store;
+		try {
+			if (typeof localStorage !== "undefined") return localStorage;
+		} catch {}
+		return null;
+	}
+	function shouldCollapseNativeFilters(store) {
+		const s = resolveStore(store);
+		if (!s) return true;
+		try {
+			const raw = s.getItem(COLLAPSE_KEY);
+			if (raw === null) return true;
+			return raw !== "0";
+		} catch {
+			return true;
+		}
+	}
+	function setNativeFiltersCollapsed(collapsed, store) {
+		const s = resolveStore(store);
+		if (!s) return;
+		try {
+			s.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
+		} catch {}
+	}
+	function setCollapsed(panel, toggle, collapsed) {
+		toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+		panel.classList.toggle("br34-collapsed", collapsed);
+		setNativeFiltersCollapsed(collapsed);
+	}
+	function wirePanel(panel, collapsed) {
+		let toggle = panel.querySelector(".filters-panel__toggle");
+		let body = panel.querySelector(".filters-panel__body");
+		if (!body) {
+			body = document.createElement("div");
+			body.className = "filters-panel__body";
+			for (const child of Array.from(panel.childNodes)) if (child !== toggle) body.append(child);
+			panel.append(body);
+		}
+		if (!toggle) {
+			const btn = document.createElement("button");
+			btn.type = "button";
+			btn.className = "filters-panel__toggle";
+			btn.innerHTML = `${TOGGLE_LABEL}${TOGGLE_ICON}`;
+			panel.prepend(btn);
+			toggle = btn;
+		} else if (!toggle.querySelector(".filters-panel__toggle-icon")) {
+			const icon = document.createElement("span");
+			icon.className = "filters-panel__toggle-icon";
+			icon.setAttribute("aria-hidden", "true");
+			toggle.append(icon);
+		}
+		if (!toggle.hasAttribute("aria-expanded")) toggle.setAttribute("aria-expanded", "true");
+		if (toggle instanceof HTMLButtonElement && !toggle.hasAttribute("type")) toggle.setAttribute("type", "button");
+		if (toggle.dataset.br34FilterToggleWired !== "true") {
+			toggle.dataset.br34FilterToggleWired = "true";
+			const btn = toggle;
+			btn.addEventListener("click", (e) => {
+				e.preventDefault();
+				const isExpanded = btn.getAttribute("aria-expanded") !== "false";
+				setCollapsed(panel, btn, isExpanded);
+			});
+		}
+		setCollapsed(panel, toggle, collapsed);
+	}
+	function initNativeFilterPanel() {
+		const collapsed = shouldCollapseNativeFilters();
+		const panels = document.querySelectorAll(".filters-panel");
+		for (const panel of panels) try {
+			wirePanel(panel, collapsed);
+		} catch {}
+	}
+	var CSS = `
 /* ==========================================================================
    Better Rule34Video - Industrial Brutalism + Erotic Latex Edition
    ========================================================================== */
@@ -1540,6 +1519,15 @@ ins.adsbyjuicy,
 
 .filters-panel__toggle[aria-expanded="false"] .filters-panel__toggle-icon {
   transform: rotate(-90deg) !important;
+}
+
+/* Collapsed state (wired by nativefilter.ts): hide the body, flatten toggle */
+.filters-panel.br34-collapsed .filters-panel__body {
+  display: none !important;
+}
+
+.filters-panel__toggle[aria-expanded="false"] {
+  border-bottom: none !important;
 }
 
 .filters-panel__body {
@@ -2277,166 +2265,153 @@ ins.adsbyjuicy,
   }
 }
 `;
-  let managedCards = [];
-  let filterBar = null;
-  let autoPager = null;
-  let currentFilter = null;
-  let bookmarkHandle = null;
-  function injectStyles() {
-    if (document.getElementById("br34-styles")) return;
-    const style = document.createElement("style");
-    style.id = "br34-styles";
-    style.textContent = CSS;
-    (document.head || document.documentElement).append(style);
-  }
-  function applyOwnWatched(el, data) {
-    if (data.id && isWatchedId(data.id)) {
-      data.isWatched = true;
-      el.classList.add("watched");
-    }
-  }
-  function scanCards() {
-    const container = findVideosContainer();
-    if (!container) return;
-    cleanAds(container);
-    const existingMap = /* @__PURE__ */ new Map();
-    for (const c of managedCards) {
-      existingMap.set(c.el, c);
-    }
-    const updatedCards = [];
-    const cardElements = container.querySelectorAll(".item.thumb");
-    for (const el of cardElements) {
-      if (isAdCard(el)) {
-        el.remove();
-        continue;
-      }
-      const existing = existingMap.get(el);
-      if (existing) {
-        applyOwnWatched(existing.el, existing.data);
-        updatedCards.push(existing);
-        continue;
-      }
-      const data = extractCardData(el);
-      if (data) {
-        applyOwnWatched(el, data);
-        updatedCards.push({ el, data });
-      }
-    }
-    managedCards = updatedCards;
-  }
-  function applyFilter() {
-    if (!currentFilter) return;
-    let visibleCount = 0;
-    for (const card of managedCards) {
-      const isVisible = matchesClientFilter(card.data, currentFilter);
-      card.el.dataset.br34Hidden = isVisible ? "false" : "true";
-      if (isVisible) visibleCount++;
-    }
-    filterBar == null ? void 0 : filterBar.setCount(visibleCount, managedCards.length);
-  }
-  function boot() {
-    injectStyles();
-    unclipBodyOverflow();
-    cleanAds();
-    hardenAnchorsIn(document);
-    initNewTab(document);
-    if (!isListingPage()) return;
-    const container = findVideosContainer();
-    if (!container) return;
-    const listKey = canonicalListKey(window.location.href);
-    if (!filterBar || !filterBar.fabElement.isConnected) {
-      filterBar == null ? void 0 : filterBar.destroy();
-      filterBar = new FilterBar({
-        onFilterChange: (state) => {
-          currentFilter = state;
-          applyFilter();
-        }
-      });
-      currentFilter = filterBar.getState();
-    }
-    scanCards();
-    if (!autoPager) {
-      autoPager = new AutoPager({
-        onNewCards: (newEls) => {
-          for (const el of newEls) {
-            if (el instanceof HTMLAnchorElement && /\/video\//.test(el.getAttribute("href") || "")) {
-              hardenAnchor(el);
-            }
-            for (const a of el.querySelectorAll('a[href*="/video/"]')) {
-              hardenAnchor(a);
-            }
-            const data = extractCardData(el);
-            if (data) {
-              applyOwnWatched(el, data);
-              managedCards.push({ el, data });
-            } else {
-              el.remove();
-            }
-          }
-          applyFilter();
-        },
-        onPageLoaded: () => {
-          cleanAds();
-          unclipBodyOverflow();
-          bookmarkHandle == null ? void 0 : bookmarkHandle.refresh();
-        }
-      });
-      autoPager.init();
-    }
-    applyFilter();
-    if (filterBar && autoPager) {
-      const pager = autoPager;
-      bookmarkHandle = mountBookmarkButton({
-        fab: filterBar.fabElement,
-        listKey,
-        getPage: () => pager.getCurrentPage(),
-        getUrl: () => pager.getCurrentPageUrl()
-      });
-    }
-  }
-  let scheduledTimer = 0;
-  function scheduleScan() {
-    window.clearTimeout(scheduledTimer);
-    scheduledTimer = window.setTimeout(() => {
-      unclipBodyOverflow();
-      cleanAds();
-      scanCards();
-      applyFilter();
-    }, 200);
-  }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      boot();
-    });
-  } else {
-    boot();
-  }
-  window.addEventListener("load", () => {
-    unclipBodyOverflow();
-    boot();
-  });
-  const observer = new MutationObserver((mutations) => {
-    var _a;
-    if (autoPager == null ? void 0 : autoPager.getIsAppending()) return;
-    let shouldScan = false;
-    for (const m of mutations) {
-      for (const node of m.addedNodes) {
-        if (node instanceof HTMLElement) {
-          if (node.classList.contains("item") || ((_a = node.querySelector) == null ? void 0 : _a.call(node, ".item.thumb"))) {
-            shouldScan = true;
-            break;
-          }
-        }
-      }
-      if (shouldScan) break;
-    }
-    if (shouldScan) {
-      scheduleScan();
-    }
-  });
-  observer.observe(document.body || document.documentElement, {
-    childList: true,
-    subtree: true
-  });
-
+	var managedCards = [];
+	var filterBar = null;
+	var autoPager = null;
+	var currentFilter = null;
+	var bookmarkHandle = null;
+	function injectStyles() {
+		if (document.getElementById("br34-styles")) return;
+		const style = document.createElement("style");
+		style.id = "br34-styles";
+		style.textContent = CSS;
+		(document.head || document.documentElement).append(style);
+	}
+	function applyOwnWatched(el, data) {
+		if (data.id && isWatchedId(data.id)) {
+			data.isWatched = true;
+			el.classList.add("watched");
+		}
+	}
+	function scanCards() {
+		const container = findVideosContainer();
+		if (!container) return;
+		cleanAds(container);
+		const existingMap = new Map();
+		for (const c of managedCards) existingMap.set(c.el, c);
+		const updatedCards = [];
+		const cardElements = container.querySelectorAll(".item.thumb");
+		for (const el of cardElements) {
+			if (isAdCard(el)) {
+				el.remove();
+				continue;
+			}
+			const existing = existingMap.get(el);
+			if (existing) {
+				applyOwnWatched(existing.el, existing.data);
+				updatedCards.push(existing);
+				continue;
+			}
+			const data = extractCardData(el);
+			if (data) {
+				applyOwnWatched(el, data);
+				updatedCards.push({
+					el,
+					data
+				});
+			}
+		}
+		managedCards = updatedCards;
+	}
+	function applyFilter() {
+		if (!currentFilter) return;
+		let visibleCount = 0;
+		for (const card of managedCards) {
+			const isVisible = matchesClientFilter(card.data, currentFilter);
+			card.el.dataset.br34Hidden = isVisible ? "false" : "true";
+			if (isVisible) visibleCount++;
+		}
+		filterBar?.setCount(visibleCount, managedCards.length);
+	}
+	function boot() {
+		injectStyles();
+		unclipBodyOverflow();
+		cleanAds();
+		hardenAnchorsIn(document);
+		initNewTab(document);
+		if (!isListingPage()) return;
+		if (!findVideosContainer()) return;
+		initNativeFilterPanel();
+		const listKey = canonicalListKey(window.location.href);
+		if (!filterBar || !filterBar.fabElement.isConnected) {
+			filterBar?.destroy();
+			filterBar = new FilterBar({ onFilterChange: (state) => {
+				currentFilter = state;
+				applyFilter();
+			} });
+			currentFilter = filterBar.getState();
+		}
+		scanCards();
+		if (!autoPager) {
+			autoPager = new AutoPager({
+				onNewCards: (newEls) => {
+					for (const el of newEls) {
+						for (const a of el.querySelectorAll("a[href*=\"/video/\"]")) hardenAnchor(a);
+						const data = extractCardData(el);
+						if (data) {
+							applyOwnWatched(el, data);
+							managedCards.push({
+								el,
+								data
+							});
+						} else el.remove();
+					}
+					applyFilter();
+				},
+				onPageLoaded: () => {
+					cleanAds();
+					unclipBodyOverflow();
+					initNativeFilterPanel();
+					bookmarkHandle?.refresh();
+				}
+			});
+			autoPager.init();
+		}
+		applyFilter();
+		if (filterBar && autoPager) {
+			const pager = autoPager;
+			bookmarkHandle = mountBookmarkButton({
+				fab: filterBar.fabElement,
+				listKey,
+				getPage: () => pager.getCurrentPage(),
+				getUrl: () => pager.getCurrentPageUrl()
+			});
+		}
+	}
+	var scheduledTimer = 0;
+	function scheduleScan() {
+		window.clearTimeout(scheduledTimer);
+		scheduledTimer = window.setTimeout(() => {
+			unclipBodyOverflow();
+			cleanAds();
+			initNativeFilterPanel();
+			scanCards();
+			applyFilter();
+		}, 200);
+	}
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => {
+		boot();
+	});
+	else boot();
+	window.addEventListener("load", () => {
+		unclipBodyOverflow();
+		boot();
+	});
+	new MutationObserver((mutations) => {
+		if (autoPager?.getIsAppending()) return;
+		let shouldScan = false;
+		for (const m of mutations) {
+			for (const node of m.addedNodes) if (node instanceof HTMLElement) {
+				if (node.classList.contains("item") || node.querySelector?.(".item.thumb")) {
+					shouldScan = true;
+					break;
+				}
+			}
+			if (shouldScan) break;
+		}
+		if (shouldScan) scheduleScan();
+	}).observe(document.body || document.documentElement, {
+		childList: true,
+		subtree: true
+	});
 })();

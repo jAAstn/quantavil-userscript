@@ -15,6 +15,10 @@ const STORAGE_KEY = 'better_rule34_settings';
 // Steps for the views slider
 const VIEWS_STEPS = [0, 1000, 5000, 10000, 25000, 50000, 100000];
 
+// Debounce for slider commits and live search (keeps filtering instant
+// without re-running the matcher on every input event).
+const DEBOUNCE_MS = 80;
+
 export class FilterBar {
   private state: FilterState;
   private callbacks: FilterBarCallbacks;
@@ -173,7 +177,7 @@ export class FilterBar {
               <span>MIN VIEWS</span>
               <span class="br34-sect-val" id="br34-val-views">${this.formatViewsLabel(this.state.minViews)}</span>
             </div>
-            <input type="range" class="br34-range-slider" id="br34-slider-views" min="0" max="6" step="1" value="${this.viewsToSliderStep(this.state.minViews)}" />
+            <input type="range" class="br34-range-slider" id="br34-slider-views" min="0" max="6" step="1" value="${viewsToNearestStep(this.state.minViews, VIEWS_STEPS)}" />
           </div>
 
           <!-- 3. Duration Slider -->
@@ -223,10 +227,6 @@ export class FilterBar {
     return panel;
   }
 
-  private viewsToSliderStep(views: number): number {
-    return viewsToNearestStep(views, VIEWS_STEPS);
-  }
-
   private formatViewsLabel(views: number): string {
     if (views <= 0) return 'ANY';
     if (views >= 1000000) return `≥ ${views / 1000000}M`;
@@ -273,7 +273,23 @@ export class FilterBar {
       this.saveSettings();
       this.updateBadge();
       this.callbacks.onFilterChange(this.state);
-    }, 80);
+    }, DEBOUNCE_MS);
+  }
+
+  /** Binds a boolean quick-toggle chip: flips state, styles, persists, emits. */
+  private bindToggle(
+    selector: string,
+    isActive: () => boolean,
+    onToggle: () => void,
+  ): void {
+    const btn = this.panelElement.querySelector<HTMLElement>(selector);
+    btn?.addEventListener('click', () => {
+      onToggle();
+      btn.classList.toggle('active', isActive());
+      this.saveSettings();
+      this.updateBadge();
+      this.callbacks.onFilterChange(this.state);
+    });
   }
 
   private bindEvents(): void {
@@ -309,7 +325,7 @@ export class FilterBar {
         this.state.query = searchInput.value;
         this.updateBadge();
         this.callbacks.onFilterChange(this.state);
-      }, 80);
+      }, DEBOUNCE_MS);
     });
 
     // 5. Rating Slider (label updates instantly, filter commits debounced)
@@ -361,38 +377,35 @@ export class FilterBar {
       this.commitSliderChange();
     });
 
-    // 9. Quick Toggles
-    const soundBtn = this.panelElement.querySelector<HTMLElement>('[data-toggle="sound"]');
-    soundBtn?.addEventListener('click', () => {
-      this.state.soundOnly = !this.state.soundOnly;
-      soundBtn.classList.toggle('active', this.state.soundOnly);
-      this.saveSettings();
-      this.updateBadge();
-      this.callbacks.onFilterChange(this.state);
-    });
+    // 9. Quick Toggles (boolean chips share one binding helper)
+    this.bindToggle(
+      '[data-toggle="sound"]',
+      () => this.state.soundOnly,
+      () => {
+        this.state.soundOnly = !this.state.soundOnly;
+      },
+    );
 
-    const hdBtn = this.panelElement.querySelector<HTMLElement>('[data-toggle="hd"]');
-    hdBtn?.addEventListener('click', () => {
-      this.state.hdOnly = !this.state.hdOnly;
-      hdBtn.classList.toggle('active', this.state.hdOnly);
-      this.saveSettings();
-      this.updateBadge();
-      this.callbacks.onFilterChange(this.state);
-    });
+    this.bindToggle(
+      '[data-toggle="hd"]',
+      () => this.state.hdOnly,
+      () => {
+        this.state.hdOnly = !this.state.hdOnly;
+      },
+    );
 
     const futaBtn = this.panelElement.querySelector<HTMLElement>('[data-toggle="futa"]');
     futaBtn?.addEventListener('click', () => {
       this.cycleFuta();
     });
 
-    const watchedBtn = this.panelElement.querySelector<HTMLElement>('[data-toggle="watched"]');
-    watchedBtn?.addEventListener('click', () => {
-      this.state.hideWatched = !this.state.hideWatched;
-      watchedBtn.classList.toggle('active', this.state.hideWatched);
-      this.saveSettings();
-      this.updateBadge();
-      this.callbacks.onFilterChange(this.state);
-    });
+    this.bindToggle(
+      '[data-toggle="watched"]',
+      () => this.state.hideWatched,
+      () => {
+        this.state.hideWatched = !this.state.hideWatched;
+      },
+    );
 
     // Reset button: restores defaults and persists them (survives reload).
     this.panelElement.querySelector('#br34-btn-reset')?.addEventListener('click', () => {
@@ -417,7 +430,7 @@ export class FilterBar {
 
     const viewsSlider = this.panelElement.querySelector<HTMLInputElement>('#br34-slider-views');
     const viewsVal = this.panelElement.querySelector<HTMLElement>('#br34-val-views');
-    if (viewsSlider) viewsSlider.value = String(this.viewsToSliderStep(this.state.minViews));
+    if (viewsSlider) viewsSlider.value = String(viewsToNearestStep(this.state.minViews, VIEWS_STEPS));
     if (viewsVal) viewsVal.textContent = this.formatViewsLabel(this.state.minViews);
 
     const durSlider = this.panelElement.querySelector<HTMLInputElement>('#br34-slider-dur');

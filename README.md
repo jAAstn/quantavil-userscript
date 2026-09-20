@@ -23,63 +23,63 @@ A curated, production-grade monorepo of modern userscripts, browser extensions, 
 
 ## 🎥 Media, Video & Streaming
 
-| Project | Type | Description |
-| :--- | :--- | :--- |
-| **[reddit-reels](./reddit-reels)** | Userscript | Full-screen in-place vertical Reel/TikTok feed for Reddit with unmuted audio mutex, smart aspect ratio containment, gallery carousels, rich discussion cards, and keyboard hotkeys. |
-| **[GlideVideo](./GlideVideo)** | Userscript / MV3 Ext | Touch gesture controller for mobile web video (playback speed, volume, brightness, pinch-to-zoom, 3 themes). Available as both a userscript and a Firefox MV3 extension. |
-| **[StreamGrabber](./StreamGrabber)** | Userscript | High-performance HLS (`.m3u8`) and fMP4 stream downloader with AES-128 decryption, adaptive quality selection, and direct blob extraction. |
-| **[youtube-filter](./youtube-filter)** | Userscript | Advanced YouTube filtering by view count, upload date, video duration, keywords, and channels, with watched video dimming and customizable preset profiles. |
-| **[telegram-bot](./telegram-bot)** | Userscript | Media downloader for Telegram Web (`/k/`, `/a/`, `webz`) that enables downloads from private/restricted channels with chunked progress tracking. |
-| **[wallhaven-enhancer](./wallhaven-enhancer)** | Userscript | Wallhaven browsing suite featuring a resizable metadata sidebar, instant lightbox overlay, grid keyboard navigation, and full-resolution downloads. |
-| **[imdb-torrent](./imdb-torrent)** | Userscript | Injects IMDb ratings, metascores, cast, and plot metadata directly into torrent index listings with direct magnet integration. |
+| Project | Description |
+| :--- | :--- |
+| **[reddit-reels](./reddit-reels)** | Swipe Reddit feeds like reels: unmuted playback, galleries, and native voting. |
+| **[GlideVideo](./GlideVideo)** | Touch gesture controller for mobile web video (playback speed, volume, brightness, pinch-to-zoom, 3 themes). Available as both a userscript and a Firefox MV3 extension. |
+| **[StreamGrabber](./StreamGrabber)** | High-performance HLS (`.m3u8`) and fMP4 stream downloader with AES-128 decryption, adaptive quality selection, and direct blob extraction. |
+| **[youtube-filter](./youtube-filter)** | Advanced YouTube filtering by view count, upload date, video duration, keywords, and channels, with watched video dimming and customizable preset profiles. |
+| **[telegram-bot](./telegram-bot)** | Media downloader for Telegram Web (`/k/`, `/a/`, `webz`) that enables downloads from private/restricted channels with chunked progress tracking. |
+| **[wallhaven-enhancer](./wallhaven-enhancer)** | Wallhaven browsing suite featuring a resizable metadata sidebar, instant lightbox overlay, grid keyboard navigation, and full-resolution downloads. |
+| **[imdb-torrent](./imdb-torrent)** | Injects IMDb ratings, metascores, cast, and plot metadata directly into torrent index listings with direct magnet integration. |
 
 ---
 
 ## 🤖 AI, LLM & Captcha Solvers
 
-| Project | Type | Description |
-| :--- | :--- | :--- |
-| **[form-genie](./form-genie)** | Userscript | Privacy-first auto form filler for desktop & mobile (IBPS, NTA, SSC, UPSC) with teach-mode rules and optional Gemini AI profile parsing. |
-| **[texpander-ai](./texpander-ai)** | Userscript | Neo Zen-styled text expander featuring global abbreviation palettes (`Alt+P`) and inline AI text transformation menus (`Alt+G` via Gemini 2.5 Flash Lite). |
-| **[universal-solver](./universal-solver)** | Userscript | Point-and-click universal web captcha solver powered by Gemini AI vision models (`gemma-3-27b-it` / Gemini) for automatic text captcha solving. |
-| **[captcha-ai](./captcha-ai)** | Userscript | Dedicated automated captcha solver tailored for Icegate portal authentication workflows using Gemini AI. |
-| **[ai-wishlist](./ai-wishlist)** | Userscript | Cross-origin shopping assistant that unifies, parses, and syncs wishlists and technical specs across Amazon and Flipkart for AI evaluation. |
-| **[google-ai-brave](./google-ai-brave)** | Userscript | Injects Google's AI Overview / AI Mode search results directly into the Brave Search sidebar for unified multi-engine answers. |
-| **[codebase-uploader](./codebase-uploader)** | Userscript | Power-user codebase packager & uploader for LLM chat windows with CRT Command Matrix UI, live context meters, and smart ignore filters. |
+| Project | Description |
+| :--- | :--- |
+| **[form-genie](./form-genie)** | Privacy-first auto form filler for desktop & mobile (IBPS, NTA, SSC, UPSC) with teach-mode rules and optional Gemini AI profile parsing. |
+| **[texpander-ai](./texpander-ai)** | Neo Zen-styled text expander featuring global abbreviation palettes (`Alt+P`) and inline AI text transformation menus (`Alt+G` via Gemini 2.5 Flash Lite). |
+| **[universal-solver](./universal-solver)** | Point-and-click universal web captcha solver powered by Gemini AI vision models (`gemma-3-27b-it` / Gemini) for automatic text captcha solving. |
+| **[captcha-ai](./captcha-ai)** | Dedicated automated captcha solver tailored for Icegate portal authentication workflows using Gemini AI. |
+| **[ai-wishlist](./ai-wishlist)** | Cross-origin shopping assistant that unifies, parses, and syncs wishlists and technical specs across Amazon and Flipkart for AI evaluation. |
+| **[google-ai-brave](./google-ai-brave)** | Injects Google's AI Overview / AI Mode search results directly into the Brave Search sidebar for unified multi-engine answers. |
+| **[codebase-uploader](./codebase-uploader)** | Power-user codebase packager & uploader for LLM chat windows with CRT Command Matrix UI, live context meters, and smart ignore filters. |
 
 ---
 
 ## 🔍 Search, Filtering & Community
 
-| Project | Type | Description |
-| :--- | :--- | :--- |
-| **[better-search](./better-search)** | Userscript | Domain highlighter and blocker across Google, Bing, DuckDuckGo, Brave, and Yandex search results. |
-| **[search-switcher](./search-switcher)** | Userscript | Minimal dark floating switcher with SVG icons to jump queries instantly across Brave, Yandex, Bing, DDG, YouTube, and Google. |
-| **[github-filter](./github-filter)** | Userscript | GitHub search query builder with saved presets, whole-word result filter, and native GitHub Primer design tokens. |
-| **[greasey-fork-filter](./greasey-fork-filter)** | Userscript | Persistent Greasy Fork script listing filter to hide low-quality scripts by install threshold, author, or keyword. |
-| **[reddit-manager](./reddit-manager)** | Userscript | Bulk-management suite for Reddit to export/import subreddits, mass leave subscriptions, and batch overwrite/delete posts and comments. |
-| **[better-alternativeto](./better-alternativeto)** | Userscript | AlternativeTo enhancer adding direct website/GitHub/app-store chips to cards, pinned compact filter bar with likes range, and accessible dark mode. |
-| **[better-rule34](./better-rule34)** | Userscript | Rule34Video brutalist erotic latex enhancer featuring a floating bottom-right telemetry FAB, four tactile sliders (rating, views, duration, year), site-wide dark carbon/scanline theme, bulletproof auto-paging, and ad eradication. |
-| **[omarchy-plugins-enhancer](./omarchy-plugins-enhancer)** | Userscript | Omarchy Plugins catalog enhancer adding auto pager next (infinite scroll), direct GitHub repository links on cards, and seen plugin greying out. |
-| **[bpedia](./bpedia)** | Userscript | Babepedia enhancer adding advanced multi-attribute filtering, glassmorphic badges, and thumbnail grid optimizations. |
+| Project | Description |
+| :--- | :--- |
+| **[better-search](./better-search)** | Domain highlighter and blocker across Google, Bing, DuckDuckGo, Brave, and Yandex search results. |
+| **[search-switcher](./search-switcher)** | Minimal dark floating switcher with SVG icons to jump queries instantly across Brave, Yandex, Bing, DDG, YouTube, and Google. |
+| **[github-filter](./github-filter)** | GitHub search query builder with saved presets, whole-word result filter, and native GitHub Primer design tokens. |
+| **[greasey-fork-filter](./greasey-fork-filter)** | Persistent Greasy Fork script listing filter to hide low-quality scripts by install threshold, author, or keyword. |
+| **[reddit-manager](./reddit-manager)** | Bulk-management suite for Reddit to export/import subreddits, mass leave subscriptions, and batch overwrite/delete posts and comments. |
+| **[better-alternativeto](./better-alternativeto)** | AlternativeTo enhancer adding direct website/GitHub/app-store chips to cards, pinned compact filter bar with likes range, and accessible dark mode. |
+| **[better-rule34](./better-rule34)** | Rule34Video brutalist erotic latex enhancer featuring a floating bottom-right telemetry FAB, four tactile sliders (rating, views, duration, year), site-wide dark carbon/scanline theme, bulletproof auto-paging, and ad eradication. |
+| **[omarchy-plugins-enhancer](./omarchy-plugins-enhancer)** | Omarchy Plugins catalog enhancer adding auto pager next (infinite scroll), direct GitHub repository links on cards, and seen plugin greying out. |
+| **[bpedia](./bpedia)** | Babepedia enhancer adding advanced multi-attribute filtering, glassmorphic badges, and thumbnail grid optimizations. |
 
 ---
 
 ## 📚 Portals, E-Learning & Productivity
 
-| Project | Type | Description |
-| :--- | :--- | :--- |
-| **[site-orbit](./site-orbit)** | Userscript / MV3 Ext | Private Domain & Tech Observatory caching verified Tranco global ranks, live in-DOM tech stacks, Cloudflare DNS/Infra, and browser telemetry. |
-| **[better-investograin](./better-investograin)** | Userscript | InvestorGain IPO table optimizer that blocks broker ads/sidebars and auto-sorts open, upcoming, and closed IPOs by true urgency with clean dividers. |
-| **[testbook-plus](./testbook-plus)** | Userscript | Testbook test suite crawler and exporter that cleans tracking scripts, preserves MathJax formulas as LaTeX, and converts question papers to clean Markdown. |
-| **[guidely-plus](./guidely-plus)** | Userscript | Guidely test review crawler that enables text selection/copying and exports full tests and solutions to structured Markdown. |
-| **[oliveboard-plus](./oliveboard-plus)** | Userscript | Oliveboard UI declutterer and mock test extractor that strips banners, stops intrusive popups, and exports full question/solution suites to Markdown. |
-| **[impex-cube-dropdown](./impex-cube-dropdown)** | Userscript | Transforms native select dropdowns into searchable, keyboard-friendly fuzzy dropdowns on Impex Cube portals. |
-| **[impex-cube-better-dates](./impex-cube-better-dates)** | Userscript | Replaces ASP.NET calendars with a fast, manual-typing enabled, smart date picker on Impex Cube portals. |
-| **[floating-stopwatch](./floating-stopwatch)** | Userscript | High-performance, tab-isolated floating stopwatch overlay with millisecond precision that persists seamlessly across page reloads. |
-| **[chess-bot](./chess-bot)** | Userscript | Tournament-grade bullet and blitz chess analysis and move helper for Chess.com. |
-| **[semursh-bot](./semursh-bot)** | Userscript | SEMrush rankings tracker widget displaying domain ranking data and traffic metrics in a sleek AMOLED dark overlay. |
-| **[obsidian-script](./obsidian-script)** | Datacore JSX | Datacore JSX study scripts for Obsidian visualizing daily study streaks, subject breakdowns, and review sessions. |
+| Project | Description |
+| :--- | :--- |
+| **[site-orbit](./site-orbit)** | Private Domain & Tech Observatory caching verified Tranco global ranks, live in-DOM tech stacks, Cloudflare DNS/Infra, and browser telemetry. |
+| **[better-investograin](./better-investograin)** | InvestorGain IPO table optimizer that blocks broker ads/sidebars and auto-sorts open, upcoming, and closed IPOs by true urgency with clean dividers. |
+| **[testbook-plus](./testbook-plus)** | Testbook test suite crawler and exporter that cleans tracking scripts, preserves MathJax formulas as LaTeX, and converts question papers to clean Markdown. |
+| **[guidely-plus](./guidely-plus)** | Guidely test review crawler that enables text selection/copying and exports full tests and solutions to structured Markdown. |
+| **[oliveboard-plus](./oliveboard-plus)** | Oliveboard UI declutterer and mock test extractor that strips banners, stops intrusive popups, and exports full question/solution suites to Markdown. |
+| **[impex-cube-dropdown](./impex-cube-dropdown)** | Transforms native select dropdowns into searchable, keyboard-friendly fuzzy dropdowns on Impex Cube portals. |
+| **[impex-cube-better-dates](./impex-cube-better-dates)** | Replaces ASP.NET calendars with a fast, manual-typing enabled, smart date picker on Impex Cube portals. |
+| **[floating-stopwatch](./floating-stopwatch)** | High-performance, tab-isolated floating stopwatch overlay with millisecond precision that persists seamlessly across page reloads. |
+| **[chess-bot](./chess-bot)** | Tournament-grade bullet and blitz chess analysis and move helper for Chess.com. |
+| **[semursh-bot](./semursh-bot)** | SEMrush rankings tracker widget displaying domain ranking data and traffic metrics in a sleek AMOLED dark overlay. |
+| **[obsidian-script](./obsidian-script)** | Datacore JSX study scripts for Obsidian visualizing daily study streaks, subject breakdowns, and review sessions. |
 
 ---
 

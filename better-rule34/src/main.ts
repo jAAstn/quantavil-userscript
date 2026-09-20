@@ -3,6 +3,7 @@ import { AutoPager, findVideosContainer, isListingPage, unclipBodyOverflow } fro
 import { canonicalListKey, mountBookmarkButton, type BookmarkHandle } from './bookmark';
 import { FilterBar } from './filterbar';
 import { hardenAnchor, hardenAnchorsIn, initNewTab, isWatchedId } from './newtab';
+import { initNativeFilterPanel } from './nativefilter';
 import { extractCardData, isAdCard, matchesClientFilter } from './parse';
 import { CSS } from './styles';
 import type { CardData, FilterState } from './types';
@@ -97,6 +98,9 @@ function boot(): void {
   const container = findVideosContainer();
   if (!container) return;
 
+  // Collapse the bulky native filter panel (default collapsed, idempotent).
+  initNativeFilterPanel();
+
   const listKey = canonicalListKey(window.location.href);
 
   // Mount floating filter bar (FAB + Seductive Modal)
@@ -121,9 +125,6 @@ function boot(): void {
     autoPager = new AutoPager({
       onNewCards: (newEls) => {
         for (const el of newEls) {
-          if (el instanceof HTMLAnchorElement && /\/video\//.test(el.getAttribute('href') || '')) {
-            hardenAnchor(el);
-          }
           for (const a of el.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"]')) {
             hardenAnchor(a);
           }
@@ -141,6 +142,7 @@ function boot(): void {
       onPageLoaded: () => {
         cleanAds();
         unclipBodyOverflow();
+        initNativeFilterPanel();
         bookmarkHandle?.refresh();
       },
     });
@@ -168,6 +170,7 @@ function scheduleScan(): void {
   scheduledTimer = window.setTimeout(() => {
     unclipBodyOverflow();
     cleanAds();
+    initNativeFilterPanel();
     scanCards();
     applyFilter();
   }, 200);

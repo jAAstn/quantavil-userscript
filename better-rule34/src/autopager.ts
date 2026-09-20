@@ -1,6 +1,7 @@
 import { cleanAds } from './adcleaner';
 import { isAdCard, resolveNextPageUrl } from './parse';
 import { hardenAnchor } from './newtab';
+import { appendPageToPath, pageNumberFromPath } from './routes';
 
 export interface AutoPagerOptions {
   onNewCards: (elements: HTMLElement[]) => void;
@@ -61,7 +62,7 @@ export function parseNextLink(
     return { url: resolved || null, fromParam: null };
   }
   if (dataParams) {
-    const match = /(?:from_videos(?:\+from_albums)?|from_videos|from_albums|from):(\d+)/i.exec(dataParams);
+    const match = /(?:from_videos(?:\+| )from_albums|from_videos|from_albums|from):(\d+)/i.exec(dataParams);
     if (match) {
       return { url: null, fromParam: parseInt(match[1], 10) };
     }
@@ -154,6 +155,7 @@ export class AutoPager {
       const fromParam =
         url.searchParams.get('from_videos') ||
         url.searchParams.get('from_videos+from_albums') ||
+        url.searchParams.get('from_videos from_albums') ||
         url.searchParams.get('from') ||
         url.searchParams.get('page') ||
         url.searchParams.get('p');
@@ -161,19 +163,8 @@ export class AutoPager {
         const p = parseInt(fromParam, 10);
         if (!isNaN(p) && p > 0) return p;
       }
-      const pathname = url.pathname;
-      // Entity routes with page number: /tags/123/2/, /categories/abc/2/, /models/123/2/
-      const entityMatch = /^\/(?:tags|categories|models|channels|playlists)\/[^/]+\/(\d+)\/?$/.exec(pathname);
-      if (entityMatch) {
-        const p = parseInt(entityMatch[1], 10);
-        if (!isNaN(p) && p > 0) return p;
-      }
-      // General catalog routes: /latest-updates/2/, /top-rated/2/, /most-viewed/2/
-      const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
-      if (catalogMatch && !['tags', 'categories', 'models', 'channels', 'playlists', 'video'].includes(catalogMatch[1])) {
-        const p = parseInt(catalogMatch[2], 10);
-        if (!isNaN(p) && p > 0) return p;
-      }
+      const pageFromPath = pageNumberFromPath(url.pathname);
+      if (pageFromPath !== null) return pageFromPath;
     } catch {
       // Fallback to 1
     }
@@ -215,46 +206,17 @@ export class AutoPager {
       const url = new URL(currentUrlStr);
       const pathname = url.pathname;
 
-      // If at root '/', normalize to '/latest-updates/'
-      if (pathname === '' || pathname === '/') {
-        url.pathname = `/latest-updates/${nextPageNum}/`;
-        return url.toString();
-      }
-
       // If on search route, KVS uses query parameter ?from_videos=N
       if (pathname.includes('/search/')) {
         url.searchParams.set('from_videos', String(nextPageNum));
         url.searchParams.delete('from_videos+from_albums');
+        url.searchParams.delete('from_videos from_albums');
         return url.toString();
       }
 
-      // Entity routes: /tags/:id/:page/, /categories/:slug/:page/, etc.
-      const entityMatch = /^(\/(?:tags|categories|models|channels|playlists)\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
-      if (entityMatch) {
-        url.pathname = `${entityMatch[1]}/${nextPageNum}/`;
-        return url.toString();
-      }
-
-      // Catalog routes: /latest-updates/:page/, /top-rated/:page/, etc.
-      const catalogMatch = /^(\/[^/]+)(?:\/\d+)?\/?$/.exec(pathname);
-      if (catalogMatch && !['tags', 'categories', 'models', 'channels', 'playlists', 'video'].includes(catalogMatch[1].slice(1))) {
-        url.pathname = `${catalogMatch[1]}/${nextPageNum}/`;
-        return url.toString();
-      }
-
-      // Fallback
-      if (/\/\d+\/?$/.test(pathname)) {
-        url.pathname = pathname.replace(/\/\d+\/?$/, `/${nextPageNum}/`);
-        return url.toString();
-      }
-
-      if (pathname.endsWith('/')) {
-        url.pathname = `${pathname}${nextPageNum}/`;
-        return url.toString();
-      } else {
-        url.pathname = `${pathname}/${nextPageNum}/`;
-        return url.toString();
-      }
+      // Path paging for root, entity, and catalog routes (shared helper).
+      url.pathname = appendPageToPath(pathname, nextPageNum);
+      return url.toString();
     } catch {
       return null;
     }

@@ -15,9 +15,21 @@ function readWatchedIds(): string[] {
   }
 }
 
+/**
+ * In-memory cache so per-card scans don't re-parse localStorage for every
+ * card. Invalidated/updated by markWatched; call invalidateWatchedCache() if
+ * storage is ever written from outside this module.
+ */
+let cachedIds: Set<string> | null = null;
+
+export function invalidateWatchedCache(): void {
+  cachedIds = null;
+}
+
 /** Ordered set of clicked video ids (oldest first). Persisted for UNWATCHED filtering. */
 export function getWatchedIds(): Set<string> {
-  return new Set(readWatchedIds());
+  if (!cachedIds) cachedIds = new Set(readWatchedIds());
+  return cachedIds;
 }
 
 export function isWatchedId(id: string): boolean {
@@ -32,6 +44,16 @@ export function markWatched(id: string): void {
     ids.push(id);
     while (ids.length > MAX_WATCHED) ids.shift();
     localStorage.setItem(WATCHED_KEY, JSON.stringify(ids));
+    // Keep the scan cache in sync without forcing a re-parse.
+    if (cachedIds) {
+      cachedIds.delete(id);
+      cachedIds.add(id);
+      while (cachedIds.size > MAX_WATCHED) {
+        const oldest = cachedIds.values().next();
+        if (oldest.done) break;
+        cachedIds.delete(oldest.value);
+      }
+    }
   } catch {
     // Ignore (private mode quota etc.)
   }
@@ -40,10 +62,10 @@ export function markWatched(id: string): void {
 /** Closest video anchor for a click target, or null outside cards. */
 export function findVideoAnchor(from: HTMLElement | null): HTMLAnchorElement | null {
   if (!from) return null;
-  if (from instanceof HTMLAnchorElement && /\/video\//.test(from.getAttribute('href') || '')) {
-    return from;
-  }
-  return from.closest?.('a[href*="/video/"]') as HTMLAnchorElement | null;
+  const anchor = from.closest?.('a[href*="/video/"]');
+  if (!(anchor instanceof HTMLAnchorElement)) return null;
+  if (!/\/video\//.test(anchor.getAttribute('href') || '')) return null;
+  return anchor;
 }
 
 /** Progressive enhancement so middle-click / long-press / no-JS-open all land in a new tab. */
@@ -79,7 +101,8 @@ export function shouldNewTabClick(e: ClickModifiers): boolean {
 
 /**
  * Delegated handler: plain left-click on a card link opens the video in a
- * new tab and records the id as watched. Returns the cleanup function.
+ * new tab and records the id as watched; middle-click keeps its native
+ * new-tab behavior and only records the id. Returns the cleanup function.
  * Idempotent — repeat boots reuse the single document listener.
  */
 let newTabWired = false;
@@ -101,7 +124,21 @@ export function initNewTab(scope: ParentNode = document): () => void {
     markWatched(videoIdFromHref(href));
     window.open(anchor.href, '_blank', 'noopener');
   };
+  const onAuxClick = (e: MouseEvent) => {
+    if (e.button !== 1) return;
+    const target = e.target as HTMLElement | null;
+    if (!target || !(target instanceof Element)) return;
+    const anchor = findVideoAnchor(target as HTMLElement);
+    if (!anchor) return;
+    const href = anchor.getAttribute('href') || anchor.href;
+    if (!href) return;
+    markWatched(videoIdFromHref(href));
+  };
 
   document.addEventListener('click', onClick, true);
-  return () => document.removeEventListener('click', onClick, true);
+  document.addEventListener('auxclick', onAuxClick, true);
+  return () => {
+    document.removeEventListener('click', onClick, true);
+    document.removeEventListener('auxclick', onAuxClick, true);
+  };
 }

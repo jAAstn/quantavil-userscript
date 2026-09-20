@@ -1,3 +1,4 @@
+import { isPaginationKey } from './routes';
 import type { CardData, FilterState } from './types';
 
 export const BASE_YEAR = 2018;
@@ -119,8 +120,7 @@ export function extractCardData(el: HTMLElement): CardData | null {
 
   const cardLink = el.querySelector<HTMLAnchorElement>('a.th, a[href*="/video/"]');
   const href = cardLink?.getAttribute('href') || '';
-  const idMatch = /video\/(\d+)/.exec(href);
-  const id = el.dataset.videoCardId || idMatch?.[1] || '';
+  const id = el.dataset.videoCardId || videoIdFromHref(href) || '';
   // Guard: never fabricate a homepage URL for unidentifiable cards.
   // Callers treat null as "skip, do not manage".
   if (!id || !href) return null;
@@ -130,8 +130,6 @@ export function extractCardData(el: HTMLElement): CardData | null {
 
   const imgEl = el.querySelector<HTMLImageElement>('img.thumb, img');
   const thumbUrl =
-    imgEl?.dataset.webp ||
-    imgEl?.dataset.original ||
     imgEl?.getAttribute('data-webp') ||
     imgEl?.getAttribute('data-original') ||
     imgEl?.src ||
@@ -261,7 +259,11 @@ export function matchesClientFilter(card: CardData, filter: FilterState): boolea
 }
 
 /**
- * Preserves existing URL query parameters when following relative pagination links.
+ * Preserves existing URL filter parameters when following relative pagination
+ * links. Pagination/offset keys (`from*`, `page`, `p`) are never carried over —
+ * the next URL already encodes its own position, so a stale offset would fetch
+ * the wrong page. Filter keys (`post_date_from`, `duration_from`, `q`, ...) pass
+ * through untouched.
  */
 export function resolveNextPageUrl(currentUrlStr: string, nextRawHref: string): string {
   try {
@@ -274,10 +276,14 @@ export function resolveNextPageUrl(currentUrlStr: string, nextRawHref: string): 
     const next = new URL(trimmedHref, current.href);
 
     if (!next.search && current.search) {
-      next.search = current.search;
+      const carried = new URLSearchParams();
+      current.searchParams.forEach((val, key) => {
+        if (!isPaginationKey(key)) carried.append(key, val);
+      });
+      next.search = carried.toString();
     } else if (current.search && next.search) {
       current.searchParams.forEach((val, key) => {
-        if (!next.searchParams.has(key)) {
+        if (!isPaginationKey(key) && !next.searchParams.has(key)) {
           next.searchParams.set(key, val);
         }
       });

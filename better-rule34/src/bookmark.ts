@@ -3,6 +3,7 @@
  * straight back to its URL (same tab, native pagination — safe at any depth,
  * no re-fetching). One bookmark per listing.
  */
+import { isPaginationKey, stripPageSegment } from './routes';
 
 export interface Bookmark {
   page: number;
@@ -20,7 +21,7 @@ export function canonicalListKey(urlStr: string): string {
   try {
     const url = new URL(urlStr);
     for (const k of [...url.searchParams.keys()]) {
-      if (/^from|^page$|^p$/i.test(k)) {
+      if (isPaginationKey(k)) {
         url.searchParams.delete(k);
       }
     }
@@ -29,18 +30,9 @@ export function canonicalListKey(urlStr: string): string {
     // Normalize root to /latest-updates/ as they represent the same catalog
     if (!pathname || pathname === '/') {
       pathname = '/latest-updates/';
-    }
-
-    // Entity routes: /tags/:id/:page/, /categories/:slug/:page/, etc.
-    const entityMatch = /^\/((?:tags|categories|models|channels|playlists)\/[^/]+)\/(\d+)\/?$/.exec(pathname);
-    if (entityMatch) {
-      pathname = `/${entityMatch[1]}/`;
     } else {
-      // General catalog routes: /latest-updates/:page/, /top-rated/:page/, etc.
-      const catalogMatch = /^\/([^/]+)\/(\d+)\/?$/.exec(pathname);
-      if (catalogMatch && !['tags', 'categories', 'models', 'channels', 'playlists'].includes(catalogMatch[1])) {
-        pathname = `/${catalogMatch[1]}/`;
-      }
+      // Strip trailing page-number path segments ("/2/") via shared helper.
+      pathname = stripPageSegment(pathname);
     }
 
     if (pathname.length > 1 && !pathname.endsWith('/')) {
