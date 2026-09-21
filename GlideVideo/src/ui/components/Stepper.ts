@@ -22,6 +22,7 @@ export class Stepper extends UIComponent {
 		const decBtn = document.createElement("button");
 		decBtn.className = "mvc-stepper-btn";
 		decBtn.textContent = "-";
+		decBtn.setAttribute("aria-label", `Decrease ${this.label}`);
 
 		this.valEl = document.createElement("span");
 		this.valEl.className = "mvc-stepper-val";
@@ -30,6 +31,7 @@ export class Stepper extends UIComponent {
 		const incBtn = document.createElement("button");
 		incBtn.className = "mvc-stepper-btn";
 		incBtn.textContent = "+";
+		incBtn.setAttribute("aria-label", `Increase ${this.label}`);
 
 		decBtn.onclick = (e) => {
 			e.stopPropagation();

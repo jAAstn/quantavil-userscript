@@ -13,7 +13,7 @@ export function isPointOnUI(target: EventTarget | null): boolean {
 	);
 }
 
-export function preventPropagation(el: HTMLElement) {
+export function preventPropagation(el: HTMLElement, signal?: AbortSignal) {
 	const events = [
 		"click",
 		"dblclick",
@@ -25,8 +25,9 @@ export function preventPropagation(el: HTMLElement) {
 		"mouseup",
 		"contextmenu",
 	];
-	events.forEach((ev) => {
-		el.addEventListener(ev, (e) => e.stopPropagation());
+	const stopPropagation = (event: Event) => event.stopPropagation();
+	events.forEach((eventName) => {
+		el.addEventListener(eventName, stopPropagation, { signal });
 	});
 }
 

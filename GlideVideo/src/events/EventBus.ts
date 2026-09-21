@@ -56,10 +56,11 @@ export class EventBus {
 		event: K,
 		cb: (payload: MvcEvents[K]) => void,
 	): () => void {
-		if (!this.listeners[event]) {
-			this.listeners[event] = [];
-		}
-		this.listeners[event]!.push(cb);
+		const listeners = (this.listeners[event] ?? []) as Array<
+			(payload: MvcEvents[K]) => void
+		>;
+		(this.listeners as Record<K, typeof listeners>)[event] = listeners;
+		listeners.push(cb);
 		return () => {
 			const arr = this.listeners[event];
 			if (arr) {

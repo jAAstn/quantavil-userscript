@@ -104,7 +104,7 @@ Prefer something smaller? **Minimal Speed FAB** swaps the speed pill for a singl
 
 Toggles sit two to a line, so the whole sheet fits without scrolling on a phone.
 
-Speed and theme are remembered per domain. Playback position is remembered per video, for the last 100. Zoom and rotation are per-video and reset on the next one, so a stray 90° never follows you around.
+Speed is remembered per domain, while the selected theme applies globally. Playback position is remembered per video, for the last 100. Zoom and rotation are per-video and reset on the next one, so a stray 90° never follows you around.
 
 If a site keeps overriding your speed, GlideVideo pushes back three times, then says so in a toast and lets the site win rather than fighting in a loop.
 
@@ -129,6 +129,7 @@ bun run build:userscript   # → dist/glidevideo.user.js
 bun run build:extension    # → dist-extension/  (Firefox MV3)
 bun run tsc                # type check
 bun run test               # vitest
+bun run test:e2e           # Chromium touch/CSS smoke test
 bun run lint               # biome
 bun run lint:extension     # web-ext, validates the built extension
 ```

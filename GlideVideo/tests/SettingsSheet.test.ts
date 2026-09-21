@@ -131,4 +131,22 @@ describe("SettingsSheet", () => {
 		sw.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
 		expect(sw.getAttribute("aria-checked")).toBe("true");
 	});
+
+	it("gives every stepper button a contextual accessible name", () => {
+		const expectedLabels = [
+			["Decrease Theme", "Increase Theme"],
+			["Decrease Rotate", "Increase Rotate"],
+			["Decrease Default speed", "Increase Default speed"],
+			["Decrease Skip duration", "Increase Skip duration"],
+		];
+
+		const stepperRows = rows().filter((row) => row.querySelector(".mvc-stepper"));
+		expect(stepperRows).toHaveLength(expectedLabels.length);
+		stepperRows.forEach((row, index) => {
+			const buttons = row.querySelectorAll(".mvc-stepper-btn");
+			expect(Array.from(buttons, (button) => button.getAttribute("aria-label"))).toEqual(
+				expectedLabels[index],
+			);
+		});
+	});
 });

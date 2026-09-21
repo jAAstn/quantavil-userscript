@@ -66,6 +66,7 @@ extension/                  # Static MV3 assets copied verbatim into dist-extens
   - `bunx web-ext lint --source-dir dist-extension` - Validate the extension before publishing
   - `bun run tsc` - Run TypeScript compiler checks
   - `bun run test` - Run Vitest regression tests
+  - `bun run test:e2e` - Build the userscript and run the Chromium touch/CSS smoke test
 
 - **Blur is opt-in per theme, and it costs frames.** High Contrast and Frame ship `--mvc-blur: none`: a `backdrop-filter` forces a readback of a surface that repaints every frame, which is the one thing that reliably costs frames on mobile. Ember, Abyss, and Volt set it deliberately for the frosted look. A new theme wanting translucency should copy their `surface + blur + shadow` trio, not invent a fourth mechanism.
 

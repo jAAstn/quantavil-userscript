@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GlideVideo: Better Video Controls with Gesture for Mobile Web
 // @namespace    https://github.com/quantavil/userscript/GlideVideo
-// @version      8.7.0
+// @version      8.8.0
 // @author       quantavil (https://github.com/quantavil)
 // @description  Makes mobile web video actually usable — control playback, volume, and zoom without fumbling for tiny buttons, all through natural touch gestures. Works on any browser that support extension like Edge, Firefox, Cromite etc.
 // @license      MIT
@@ -29,8 +29,9 @@
 			}
 		}
 		on(event, cb) {
-			if (!this.listeners[event]) this.listeners[event] = [];
-			this.listeners[event].push(cb);
+			const listeners = this.listeners[event] ?? [];
+			this.listeners[event] = listeners;
+			listeners.push(cb);
 			return () => {
 				const arr = this.listeners[event];
 				if (arr) {
@@ -115,8 +116,8 @@
 		if (!target) return false;
 		return !!target.closest?.(".mvc-ui-wrap, .mvc-backdrop, .mvc-settings-sheet, .mvc-lock-shield");
 	}
-	function preventPropagation(el) {
-		[
+	function preventPropagation(el, signal) {
+		const events = [
 			"click",
 			"dblclick",
 			"pointerdown",
@@ -126,8 +127,10 @@
 			"mousedown",
 			"mouseup",
 			"contextmenu"
-		].forEach((ev) => {
-			el.addEventListener(ev, (e) => e.stopPropagation());
+		];
+		const stopPropagation = (event) => event.stopPropagation();
+		events.forEach((eventName) => {
+			el.addEventListener(eventName, stopPropagation, { signal });
 		});
 	}
 	function formatDuration(seconds) {
@@ -1790,6 +1793,7 @@ ${THEMES}
 		isDragging = false;
 		dragPct = 0;
 		unsubscribers = [];
+		listenerController = new AbortController();
 		constructor(eventBus, ui) {
 			super();
 			this.eventBus = eventBus;
@@ -1834,7 +1838,7 @@ ${THEMES}
 					e.stopPropagation();
 					this.eventBus.emit("video:seek-requested", { time: this.duration });
 				}
-			});
+			}, { signal: this.listenerController.signal });
 			this.trackWrap = document.createElement("div");
 			this.trackWrap.className = "mvc-progress-track-wrap";
 			const bgTrack = document.createElement("div");
@@ -1850,7 +1854,7 @@ ${THEMES}
 			this.tooltipEl.style.display = "none";
 			this.trackWrap.append(bgTrack, this.bufTrack, this.fillTrack, this.thumbEl, this.tooltipEl);
 			wrap.append(this.trackWrap);
-			preventPropagation(wrap);
+			preventPropagation(wrap, this.listenerController.signal);
 			return wrap;
 		}
 		setupSubscriptions() {
@@ -1961,6 +1965,7 @@ ${THEMES}
 			this.tooltipEl.textContent = formatDuration(previewTime);
 		}
 		destroy() {
+			this.listenerController.abort();
 			this.unsubscribers.forEach((unsub) => unsub());
 			this.unsubscribers = [];
 			this.element.remove();
@@ -2030,12 +2035,14 @@ ${THEMES}
 			const decBtn = document.createElement("button");
 			decBtn.className = "mvc-stepper-btn";
 			decBtn.textContent = "-";
+			decBtn.setAttribute("aria-label", `Decrease ${this.label}`);
 			this.valEl = document.createElement("span");
 			this.valEl.className = "mvc-stepper-val";
 			this.valEl.textContent = this.valFmt(this.getVal());
 			const incBtn = document.createElement("button");
 			incBtn.className = "mvc-stepper-btn";
 			incBtn.textContent = "+";
+			incBtn.setAttribute("aria-label", `Increase ${this.label}`);
 			decBtn.onclick = (e) => {
 				e.stopPropagation();
 				vibrate(10);
@@ -2588,7 +2595,7 @@ ${THEMES}
 			this.backdrop = backdrop;
 			this.toast = toast;
 			this.gestureOverlay = gestureOverlay;
-			preventPropagation(backdrop);
+			preventPropagation(backdrop, this.store.abortController.signal);
 			wrap.style.cssText = "position:fixed; inset:0; z-index:2147483647; pointer-events:none; display:none; opacity:0; transition:opacity .35s ease;";
 			const container = getFullscreenContainer();
 			container.append(backdrop, toast, gestureOverlay);
@@ -2637,7 +2644,7 @@ ${THEMES}
 			this.doubleTapRightText = rightText;
 			this.stepper = new SpeedStepper(this.eventBus, this);
 			this.stepper.dom.style.pointerEvents = "auto";
-			preventPropagation(this.stepper.dom);
+			preventPropagation(this.stepper.dom, this.store.abortController.signal);
 			this.progressBar = new ProgressBar(this.eventBus, this);
 			if (!!(document.pictureInPictureEnabled || "requestPictureInPicture" in HTMLVideoElement.prototype || "webkitSupportsPresentationMode" in HTMLVideoElement.prototype)) {
 				this.pipBtn = document.createElement("button");
@@ -2650,20 +2657,21 @@ ${THEMES}
 					this.resetCollapseTimer();
 					this.togglePiP();
 				};
-				preventPropagation(this.pipBtn);
+				preventPropagation(this.pipBtn, this.store.abortController.signal);
 			}
-			this.settingsBtn = document.createElement("button");
-			this.settingsBtn.className = "mvc-settings-btn";
-			this.settingsBtn.setAttribute("aria-label", "Settings");
-			this.settingsBtn.style.pointerEvents = "auto";
-			this.settingsBtn.appendChild(this.getIcon("settings"));
-			this.settingsBtn.onclick = (e) => {
+			const settingsBtn = document.createElement("button");
+			this.settingsBtn = settingsBtn;
+			settingsBtn.className = "mvc-settings-btn";
+			settingsBtn.setAttribute("aria-label", "Settings");
+			settingsBtn.style.pointerEvents = "auto";
+			settingsBtn.appendChild(this.getIcon("settings"));
+			settingsBtn.onclick = (e) => {
 				e.stopPropagation();
 				this.resetCollapseTimer();
 				this.ensureSettingsSheet();
-				if (this.settingsSheet) this.toggleMenu(this.settingsSheet.dom, this.settingsBtn);
+				if (this.settingsSheet) this.toggleMenu(this.settingsSheet.dom, settingsBtn);
 			};
-			preventPropagation(this.settingsBtn);
+			preventPropagation(settingsBtn, this.store.abortController.signal);
 			const frameEl = this.createEl("div", "mvc-frame");
 			for (let i = 0; i < 4; i++) frameEl.appendChild(this.createEl("i"));
 			container.appendChild(frameEl);
@@ -2704,7 +2712,7 @@ ${THEMES}
 				this.resetCollapseTimer();
 				this.toggleScreenLock();
 			};
-			preventPropagation(this.lockBtn);
+			preventPropagation(this.lockBtn, this.store.abortController.signal);
 			this.ratioBtn = document.createElement("button");
 			this.ratioBtn.className = "mvc-ratio-btn";
 			this.ratioBtn.setAttribute("aria-label", "Aspect ratio — hold to rotate");
@@ -2728,7 +2736,7 @@ ${THEMES}
 				this.showToast(`Aspect ratio: ${nextRatio.toUpperCase()}`);
 			};
 			this.attachRotateLongPress(this.ratioBtn);
-			preventPropagation(this.ratioBtn);
+			preventPropagation(this.ratioBtn, this.store.abortController.signal);
 			const controlsGroup = this.createEl("div", "mvc-controls-group");
 			const controlsRow = this.createEl("div", "mvc-controls-row collapsed");
 			this.controlsRow = controlsRow;
@@ -2746,7 +2754,7 @@ ${THEMES}
 				e.stopPropagation();
 				this.toggleControlsRow();
 			};
-			preventPropagation(this.collapseBtn);
+			preventPropagation(this.collapseBtn, this.store.abortController.signal);
 			controlsGroup.appendChild(controlsRow);
 			controlsGroup.appendChild(this.collapseBtn);
 			const topBar = this.createEl("div", "mvc-top-bar");
@@ -2772,7 +2780,9 @@ ${THEMES}
 			};
 		}
 		positionSideBar(bar, side) {
-			const rect = this.store.activeVideo.getBoundingClientRect();
+			const video = this.store.activeVideo;
+			if (!video) return;
+			const rect = video.getBoundingClientRect();
 			const barH = clamp(rect.height * MVC_CONFIG.SIDEBAR_HEIGHT_RATIO, MVC_CONFIG.SIDEBAR_MIN_HEIGHT, MVC_CONFIG.SIDEBAR_MAX_HEIGHT);
 			const top = rect.top + (rect.height - barH) / 2;
 			const effectiveSide = this.store.settings.leftHandMode ? side === "right" ? "left" : "right" : side;
@@ -2789,7 +2799,7 @@ ${THEMES}
 		ensureSettingsSheet() {
 			if (this.settingsSheet) return;
 			this.settingsSheet = new SettingsSheet(this.eventBus, this.store, this);
-			preventPropagation(this.settingsSheet.dom);
+			preventPropagation(this.settingsSheet.dom, this.store.abortController.signal);
 			getFullscreenContainer().appendChild(this.settingsSheet.dom);
 		}
 		updateSpeedDisplay() {
@@ -3515,13 +3525,16 @@ ${THEMES}
 			if (this.videoMutationObserver) this.videoMutationObserver.disconnect();
 			if (v) {
 				const meta = this.store.getVideoMetadata(v);
-				if (!meta.transform) this.store.updateVideoMetadata(v, { transform: {
-					ratio: "fit",
-					zoom: 1,
-					rot: 0
-				} });
-				else if (meta.transform.rot === void 0) meta.transform.rot = 0;
-				this.store.settings.transform = meta.transform;
+				let transform = meta.transform;
+				if (!transform) {
+					transform = {
+						ratio: "fit",
+						zoom: 1,
+						rot: 0
+					};
+					this.store.updateVideoMetadata(v, { transform });
+				} else if (transform.rot === void 0) transform.rot = 0;
+				this.store.settings.transform = transform;
 				const savedTime = this.store.getVideoPosition(v);
 				if (savedTime > 0) {
 					const applyRestore = () => {

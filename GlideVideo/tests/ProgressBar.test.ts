@@ -144,4 +144,29 @@ describe("ProgressBar Component", () => {
 		progressBar.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }));
 		expect(skipSpy).toHaveBeenCalledWith({ dir: -1, customSeconds: 10 });
 	});
+
+	it("stops handling keyboard events after destroy", () => {
+		const skipSpy = vi.fn();
+		eventBus.on("video:skip-requested", skipSpy);
+		const element = progressBar.dom;
+
+		progressBar.destroy();
+		element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+
+		expect(skipSpy).not.toHaveBeenCalled();
+	});
+
+	it("removes propagation guards after destroy", () => {
+		const element = progressBar.dom;
+		const parent = document.createElement("div");
+		const parentClick = vi.fn();
+		parent.addEventListener("click", parentClick);
+		parent.appendChild(element);
+
+		progressBar.destroy();
+		parent.appendChild(element);
+		element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+		expect(parentClick).toHaveBeenCalledOnce();
+	});
 });

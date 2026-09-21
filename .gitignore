@@ -10,3 +10,5 @@ screenshots/
 __pycache__/
 .pytest_cache/
 .superpowers/
+GlideVideo/test-results/
+GlideVideo/playwright-report/

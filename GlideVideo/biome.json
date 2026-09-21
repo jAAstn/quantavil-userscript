@@ -21,7 +21,7 @@
 			},
 			"style": {
 				"useConst": "off",
-				"noNonNullAssertion": "off",
+				"noNonNullAssertion": "error",
 				"useTemplate": "off",
 				"noUselessElse": "off"
 			}

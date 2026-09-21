@@ -18,6 +18,7 @@ export class ProgressBar extends UIComponent {
 	private isDragging = false;
 	private dragPct = 0;
 	private unsubscribers: Array<() => void> = [];
+	private readonly listenerController = new AbortController();
 
 	constructor(
 		private readonly eventBus: EventBus,
@@ -66,7 +67,7 @@ export class ProgressBar extends UIComponent {
 				e.stopPropagation();
 				this.eventBus.emit("video:seek-requested", { time: this.duration });
 			}
-		});
+		}, { signal: this.listenerController.signal });
 
 		this.trackWrap = document.createElement("div");
 		this.trackWrap.className = "mvc-progress-track-wrap";
@@ -90,7 +91,7 @@ export class ProgressBar extends UIComponent {
 		this.trackWrap.append(bgTrack, this.bufTrack, this.fillTrack, this.thumbEl, this.tooltipEl);
 		wrap.append(this.trackWrap);
 
-		preventPropagation(wrap);
+		preventPropagation(wrap, this.listenerController.signal);
 		return wrap;
 	}
 
@@ -232,6 +233,7 @@ export class ProgressBar extends UIComponent {
 	}
 
 	public destroy() {
+		this.listenerController.abort();
 		this.unsubscribers.forEach((unsub) => unsub());
 		this.unsubscribers = [];
 		this.element.remove();

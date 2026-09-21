@@ -162,14 +162,14 @@ export class VideoTransform implements EventListenerObject {
 		if (v) {
 			// Restore video transform/zoom on new video load, or initialize default
 			const meta = this.store.getVideoMetadata(v);
-			if (!meta.transform) {
-				this.store.updateVideoMetadata(v, {
-					transform: { ratio: "fit", zoom: 1, rot: 0 },
-				});
-			} else if (meta.transform.rot === undefined) {
-				meta.transform.rot = 0;
+			let transform = meta.transform;
+			if (!transform) {
+				transform = { ratio: "fit", zoom: 1, rot: 0 };
+				this.store.updateVideoMetadata(v, { transform });
+			} else if (transform.rot === undefined) {
+				transform.rot = 0;
 			}
-			this.store.settings.transform = meta.transform!;
+			this.store.settings.transform = transform;
 
 			const savedTime = this.store.getVideoPosition(v);
 			if (savedTime > 0) {

@@ -182,7 +182,7 @@ export class UIManager {
 		this.toast = toast;
 		this.gestureOverlay = gestureOverlay;
 
-		preventPropagation(backdrop);
+		preventPropagation(backdrop, this.store.abortController.signal);
 
 		// Make sure wrap doesn't swallow touches for standard video control gestures
 		wrap.style.cssText =
@@ -252,7 +252,7 @@ export class UIManager {
 		// Mount modular Stepper & ProgressBar
 		this.stepper = new SpeedStepper(this.eventBus, this);
 		this.stepper.dom.style.pointerEvents = "auto"; // allow clicks
-		preventPropagation(this.stepper.dom);
+		preventPropagation(this.stepper.dom, this.store.abortController.signal);
 
 		this.progressBar = new ProgressBar(this.eventBus, this);
 
@@ -273,23 +273,24 @@ export class UIManager {
 				this.resetCollapseTimer();
 				this.togglePiP();
 			};
-			preventPropagation(this.pipBtn);
+			preventPropagation(this.pipBtn, this.store.abortController.signal);
 		}
 
-		this.settingsBtn = document.createElement("button");
-		this.settingsBtn.className = "mvc-settings-btn";
-		this.settingsBtn.setAttribute("aria-label", "Settings");
-		this.settingsBtn.style.pointerEvents = "auto";
-		this.settingsBtn.appendChild(this.getIcon("settings"));
-		this.settingsBtn.onclick = (e) => {
+		const settingsBtn = document.createElement("button");
+		this.settingsBtn = settingsBtn;
+		settingsBtn.className = "mvc-settings-btn";
+		settingsBtn.setAttribute("aria-label", "Settings");
+		settingsBtn.style.pointerEvents = "auto";
+		settingsBtn.appendChild(this.getIcon("settings"));
+		settingsBtn.onclick = (e) => {
 			e.stopPropagation();
 			this.resetCollapseTimer();
 			this.ensureSettingsSheet();
 			if (this.settingsSheet) {
-				this.toggleMenu(this.settingsSheet.dom, this.settingsBtn!);
+				this.toggleMenu(this.settingsSheet.dom, settingsBtn);
 			}
 		};
-		preventPropagation(this.settingsBtn);
+		preventPropagation(settingsBtn, this.store.abortController.signal);
 
 		// Lock Shield
 		// Camera-gate corner brackets (only visible in the Frame theme)
@@ -337,7 +338,7 @@ export class UIManager {
 			this.resetCollapseTimer();
 			this.toggleScreenLock();
 		};
-		preventPropagation(this.lockBtn);
+		preventPropagation(this.lockBtn, this.store.abortController.signal);
 
 		// Aspect Ratio Button — tap cycles ratio, long-press rotates
 		this.ratioBtn = document.createElement("button");
@@ -361,7 +362,7 @@ export class UIManager {
 			this.showToast(`Aspect ratio: ${nextRatio.toUpperCase()}`);
 		};
 		this.attachRotateLongPress(this.ratioBtn);
-		preventPropagation(this.ratioBtn);
+		preventPropagation(this.ratioBtn, this.store.abortController.signal);
 
 		// Create collapsible controls group at the top right
 		const controlsGroup = this.createEl("div", "mvc-controls-group");
@@ -386,7 +387,7 @@ export class UIManager {
 			e.stopPropagation();
 			this.toggleControlsRow();
 		};
-		preventPropagation(this.collapseBtn);
+		preventPropagation(this.collapseBtn, this.store.abortController.signal);
 
 		controlsGroup.appendChild(controlsRow);
 		controlsGroup.appendChild(this.collapseBtn);
@@ -416,7 +417,9 @@ export class UIManager {
 
 	// Vertically centers the pill on the active video and returns its height
 	private positionSideBar(bar: HTMLDivElement, side: "left" | "right") {
-		const rect = this.store.activeVideo!.getBoundingClientRect();
+		const video = this.store.activeVideo;
+		if (!video) return;
+		const rect = video.getBoundingClientRect();
 		const barH = clamp(
 			rect.height * MVC_CONFIG.SIDEBAR_HEIGHT_RATIO,
 			MVC_CONFIG.SIDEBAR_MIN_HEIGHT,
@@ -445,7 +448,10 @@ export class UIManager {
 	public ensureSettingsSheet() {
 		if (this.settingsSheet) return;
 		this.settingsSheet = new SettingsSheet(this.eventBus, this.store, this);
-		preventPropagation(this.settingsSheet.dom);
+		preventPropagation(
+			this.settingsSheet.dom,
+			this.store.abortController.signal,
+		);
 
 		const container = getFullscreenContainer();
 		container.appendChild(this.settingsSheet.dom);
