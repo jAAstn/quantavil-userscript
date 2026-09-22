@@ -16,7 +16,7 @@ const DEFAULT_BADGE_SETTINGS: BadgeSettings = {
 
 const DEFAULT_FILTER_SETTINGS: FilterSettings = {
   minAge: 18,
-  maxAge: 50,
+  maxAge: 70,
   minHeight: 130,
   maxHeight: 220,
   minRating: 0,
@@ -142,7 +142,7 @@ export const Cache = {
       settings: Record<string, any>;
       profiles: Record<string, any>;
     } = {
-      version: '1.1.3',
+      version: '2.1.0',
       exportedAt: Date.now(),
       settings: {},
       profiles: {}

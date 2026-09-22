@@ -41,7 +41,7 @@ export const FilterPanel = {
 
     this.createBackdrop();
     this.createFABs();
-    this.createDrawers(onFilterChange);
+    this.createDrawers();
     this.setupEvents(onFilterChange);
     this.applySettingsUI();
   },
@@ -58,6 +58,7 @@ export const FilterPanel = {
     filterFab.className = 'bp-fab';
     filterFab.title = 'Filter Performers';
     filterFab.setAttribute('aria-label', 'Filter Performers');
+    filterFab.appendChild(icon('filter', 24));
 
     const badge = document.createElement('span');
     badge.className = 'bp-fab-badge';
@@ -69,7 +70,7 @@ export const FilterPanel = {
     activeFiltersCountEl = badge;
   },
 
-  createDrawers(onFilterChange: () => void): void {
+  createDrawers(): void {
     // ── Single Combined Filter & Settings Drawer ──
     filterDrawer = document.createElement('div');
     filterDrawer.id = 'bp-filter-drawer';
@@ -465,13 +466,11 @@ export const FilterPanel = {
     setVal('bp-min-favs', '');
 
     // Reset segmented buttons
-    document.querySelectorAll('#bp-boobs-segment .bp-segmented-btn').forEach((btn, i) => {
-      btn.classList.toggle('active', i === 0);
-      btn.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
-    });
-    document.querySelectorAll('#bp-profession-segment .bp-segmented-btn').forEach((btn, i) => {
-      btn.classList.toggle('active', i === 0);
-      btn.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
+    ['#bp-boobs-segment', '#bp-profession-segment'].forEach((segId) => {
+      document.querySelectorAll(`${segId} .bp-segmented-btn`).forEach((btn, i) => {
+        btn.classList.toggle('active', i === 0);
+        btn.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
+      });
     });
 
     // Clear all active tags
@@ -635,7 +634,8 @@ export const FilterPanel = {
     let matchCount = 0;
     let totalCount = 0;
 
-    const nonSearchFilterActive = this.isNonSearchFilterActive(filters);
+    const activeFilterCount = this.getActiveFiltersCount(filters);
+    const nonSearchFilterActive = activeFilterCount - (filters.searchQuery ? 1 : 0) > 0;
     
     // Hoist range check function
     const inRange = (val: number | null, min: number, max: number, active: boolean) =>
@@ -709,16 +709,15 @@ export const FilterPanel = {
     });
 
     // Update status line
-    this.updateStatusLine(matchCount, totalCount, filters);
+    this.updateStatusLine(matchCount, totalCount, activeFilterCount > 0);
 
     // Update FAB badge to display active filters count
-    this.updateFabBadge(filters);
+    this.updateFabBadge(activeFilterCount);
   },
 
-  updateStatusLine(matchCount: number, totalCount: number, filters: FilterSettings): void {
+  updateStatusLine(matchCount: number, totalCount: number, isFiltering: boolean): void {
     if (!statusLineEl) return;
 
-    const isFiltering = this.isFiltering(filters);
     if (isFiltering) {
       statusLineEl.style.display = 'block';
       statusLineEl.textContent = `Showing ${matchCount} of ${totalCount}`;
@@ -727,13 +726,12 @@ export const FilterPanel = {
     }
   },
 
-  updateFabBadge(filters: FilterSettings): void {
+  updateFabBadge(activeFilterCount: number): void {
     if (!activeFiltersCountEl) return;
 
-    const activeFiltersCount = this.getActiveFiltersCount(filters);
-    if (activeFiltersCount > 0) {
+    if (activeFilterCount > 0) {
       activeFiltersCountEl.style.display = 'flex';
-      activeFiltersCountEl.textContent = String(activeFiltersCount);
+      activeFiltersCountEl.textContent = String(activeFilterCount);
     } else {
       activeFiltersCountEl.style.display = 'none';
     }
@@ -746,13 +744,5 @@ export const FilterPanel = {
       f.ethnicities.length > 0, f.hairColors.length > 0, f.eyeColors.length > 0,
       f.cupSizes.length > 0, f.performances.length > 0
     ].filter(Boolean).length;
-  },
-
-  isFiltering(f: FilterSettings): boolean {
-    return this.getActiveFiltersCount(f) > 0;
-  },
-
-  isNonSearchFilterActive(f: FilterSettings): boolean {
-    return this.getActiveFiltersCount(f) - (f.searchQuery ? 1 : 0) > 0;
   }
 };

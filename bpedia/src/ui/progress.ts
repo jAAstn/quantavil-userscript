@@ -28,6 +28,25 @@ export const ProgressBar = {
     container?.classList.add('active');
   },
 
+  getTitleEl(): HTMLElement | null {
+    if (!cachedTitleEl) {
+      cachedTitleEl = document.querySelector('#bp-filter-drawer .bp-drawer-header h3');
+    }
+    return cachedTitleEl;
+  },
+
+  isSettingsViewVisible(): boolean {
+    const settingsView = document.getElementById('bp-settings-view');
+    return !!settingsView && settingsView.style.display !== 'none';
+  },
+
+  /** Only target the filter drawer title, not the settings drawer, and only if settings view is not active */
+  setTitle(text: string): void {
+    if (this.isSettingsViewVisible()) return;
+    const titleEl = this.getTitleEl();
+    if (titleEl) titleEl.textContent = text;
+  },
+
   update(current: number, total: number): void {
     this.show();
     if (!bar) return;
@@ -37,17 +56,7 @@ export const ProgressBar = {
     container?.setAttribute('aria-valuenow', String(percent));
     container?.setAttribute('aria-valuetext', `Scraping progress: ${percent}%`);
 
-    // Only target the filter drawer title, not the settings drawer, and only if settings view is not active
-    const settingsView = document.getElementById('bp-settings-view');
-    const isSettingsVisible = settingsView && settingsView.style.display !== 'none';
-    if (!cachedTitleEl) {
-      cachedTitleEl = document.querySelector('#bp-filter-drawer .bp-drawer-header h3');
-    }
-    if (cachedTitleEl && !isSettingsVisible) {
-      cachedTitleEl.textContent = percent < 100
-        ? `Scraping (${current}/${total})`
-        : 'Babepedia Filter';
-    }
+    this.setTitle(percent < 100 ? `Scraping (${current}/${total})` : 'Babepedia Filter');
 
     if (percent >= 100) this.hide();
   },
@@ -57,12 +66,7 @@ export const ProgressBar = {
     fadeTimeout = setTimeout(() => {
       container?.classList.remove('active');
       if (bar) bar.style.width = '0%';
-      const settingsView = document.getElementById('bp-settings-view');
-      const isSettingsVisible = settingsView && settingsView.style.display !== 'none';
-      if (!cachedTitleEl) {
-        cachedTitleEl = document.querySelector('#bp-filter-drawer .bp-drawer-header h3');
-      }
-      if (cachedTitleEl && !isSettingsVisible) cachedTitleEl.textContent = 'Babepedia Filter';
+      this.setTitle('Babepedia Filter');
     }, 1000);
   }
 };

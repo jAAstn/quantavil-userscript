@@ -15,7 +15,7 @@ function svg(size: number, strokeWidth: number = 2, fill: string = 'none', strok
   return s;
 }
 
-const PATHS: Record<string, { paths: string[]; isStroke: boolean; fill?: string; stroke?: string; viewBox?: string }> = {
+const PATHS: Record<string, { paths: string[]; isStroke: boolean; fill?: string; stroke?: string }> = {
   filter: {
     paths: ['M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z'],
     isStroke: false,
@@ -54,7 +54,6 @@ export function icon(name: string, size = 20, strokeWidth = 2): SVGSVGElement {
   }
 
   const s = svg(size, strokeWidth, conf.fill || 'none', conf.stroke || 'currentColor');
-  if (conf.viewBox) s.setAttribute('viewBox', conf.viewBox);
 
   conf.paths.forEach((d) => {
     const el = document.createElementNS(NS, 'path');

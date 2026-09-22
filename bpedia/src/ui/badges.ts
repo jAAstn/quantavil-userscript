@@ -4,10 +4,10 @@ export const Badges = {
   /** Render badges on a thumbnail exactly once. Visibility is toggled via CSS on #thumbs. */
   render(thumbshotEl: HTMLElement, profile: PerformerProfile): void {
     if (thumbshotEl.hasAttribute('data-bp-badged')) return;
-    thumbshotEl.setAttribute('data-bp-badged', 'true');
 
     const anchor = thumbshotEl.querySelector('a');
     if (!anchor) return;
+    thumbshotEl.setAttribute('data-bp-badged', 'true');
 
     // Top-Left: Age
     if (profile.personal.age) {
@@ -46,7 +46,6 @@ export const Badges = {
       }
 
       const span = document.createElement('span');
-      span.style.verticalAlign = 'middle';
       span.textContent = profile.body.cup;
       badge.appendChild(span);
 
