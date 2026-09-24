@@ -83,7 +83,7 @@ export const FilterPanel = {
         <h3 id="bp-drawer-title">Babepedia Filter</h3>
         <div class="bp-header-actions">
           <button id="bp-drawer-settings-toggle" class="bp-icon-btn" title="Settings"></button>
-          <button class="bp-close-btn" title="Close Panel"></button>
+          <button class="bp-icon-btn bp-close-btn" title="Close Panel"></button>
         </div>
       </div>
       

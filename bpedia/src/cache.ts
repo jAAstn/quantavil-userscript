@@ -142,7 +142,7 @@ export const Cache = {
       settings: Record<string, any>;
       profiles: Record<string, any>;
     } = {
-      version: '2.1.0',
+      version: '2.3.0',
       exportedAt: Date.now(),
       settings: {},
       profiles: {}
@@ -234,5 +234,5 @@ function validateFilterSettings(input: any): FilterSettings {
 
 
 function cleanUrl(url: string): string {
-  return url.replace(/^\/babe\//, '').replace(/\/$/, '');
+  return url.replace(/^https?:\/\/[^/]+/, '').replace(/^\/babe\//, '').replace(/\/$/, '');
 }

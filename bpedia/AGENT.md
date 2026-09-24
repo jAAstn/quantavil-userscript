@@ -1,7 +1,7 @@
 # AGENT — Babepedia Advanced Filter Userscript
 
 ## Overview
-A Tampermonkey/Violentmonkey userscript that adds advanced filtering capabilities to Babepedia list pages. Since list pages (like Top 100) only show names and thumbnails, the script fetches individual profiles asynchronously, extracts biography stats (age, ethnicity, professions, cup size, natural/fake boobs, and performance acts), caches them locally in extension storage, and provides a dual-drawer UI (Filters panel and Settings panel) to customize the active view.
+A Tampermonkey/Violentmonkey userscript that adds advanced filtering capabilities to Babepedia list pages. Since list pages (like Top 100) only show names and thumbnails, the script fetches individual profiles asynchronously, extracts biography stats (age, ethnicity, professions, cup size, natural/fake boobs, and performance acts), caches them locally in extension storage, and provides a single-drawer UI (Filters view and Settings view) to customize the active view.
 
 ## Structure
 bpedia/
@@ -10,24 +10,23 @@ bpedia/
 ├── package.json              # Bundling scripts & dependencies (vite, vite-plugin-monkey)
 ├── tsconfig.json             # TS compiler configuration
 ├── vite.config.ts            # Vite + monkey plugin configuration
-├── index1.html               # Example list page
-├── index2.html               # Example profile page
 ├── AGENT.md                  # Project context and state tracking
 └── src/
-    ├── main.ts               # Entry point, event listeners, and throttled queue
-    ├── style.css             # Glassmorphic responsive styling
+    ├── main.ts               # Entry point, event listeners, and parallel scrape queue
+    ├── style.css             # Solid responsive styling
     ├── types.ts              # TS interfaces for profile & settings
     ├── parser.ts             # Profile scraper and nationality country-code mapper
     ├── cache.ts              # Storage API wrapper for user cache and filters
     └── ui/
         ├── progress.ts       # Page top progress bar
         ├── badges.ts         # Corner badge layout injection (combined cup + boob status dot)
-        └── filterPanel.ts    # Double FAB drawers: Filter controls & Badge config Settings
+        ├── icons.ts          # Shared SVG icon factory
+        └── filterPanel.ts    # Single FAB + drawer: filter controls & settings views
 
 ## Conventions
 - **Userscript format**: Built via `vite-plugin-monkey`, output matches standard UserScript tags.
 - **Vanilla TS & DOM**: Plain DOM API manipulations to avoid framework overhead on mobile.
-- **Asynchronous Scraping**: Sequential fetches with a 250ms throttle delay.
+- **Asynchronous Scraping**: Parallel fetches (up to 4 concurrent) with 60ms staggered dispatch starts and incremental cooldown backoff on rate limits.
 - **Client-side Caching**: Profile attributes cached via `GM_getValue`/`GM_setValue` with namespace keys.
 - **Responsive Theme Adaptability**: Styling automatically responds to `.lightsoff` class on the body tag for dark mode.
 
@@ -37,7 +36,7 @@ bpedia/
 
 ## Critical Information
 - **Missing Data on Lists**: List page HTML only contains `thumbshot` containers with a link to the profile and an image. No biography details are present in the list HTML.
-- **Rate-Limiting Protection**: Fetching up to 100 profiles per page could trigger server-side rate limits. Fetch requests should be sequential (or batch-limited) with a brief delay (e.g., 200ms) and show a progress bar to the user.
+- **Rate-Limiting Protection**: Fetching up to 100 profiles per page could trigger server-side rate limits. Fetch requests run at most 4 concurrent with 60ms staggered starts and show a progress bar to the user.
 - **Cache Invalidation**: Profile details (e.g. age, rating) change slowly, but we should store a timestamp to allow optional cache invalidation or update.
 
 ## Insights
@@ -71,14 +70,19 @@ bpedia/
 - SVG innerHTML and inline styles: mixed styling rules and string-interpolated SVGs. Fix: removed redundant styles, built SVGs via namespace DOM APIs.
 - Logic duplication: same filter activity checks repeated in three places. Fix: refactored checks to reuse getActiveFiltersCount.
 - Verbose logic chains: long chains of if checks nested in applyFiltersToPage. Fix: desloppified using single type-safe matches expression.
-- Scraper retry boilerplate: onload and onerror blocks duplicated failure logic. Fix: extracted a safety-aware handleRetryOrFail helper.
+- Scraper retry boilerplate: onload and onerror blocks duplicated failure logic. Fix: extracted shared onRequestFailed helper plus handleRetryable/handleTerminal.
 - Slider bounds listener boilerplate: repetitive min/max listener bindings. Fix: looped listener assignments over pair array.
 - Cache try/catch boilerplate: JSON parsing try/catch blocks repeated across multiple getters. Fix: extracted a safeParse utility.
 - Corrupted blank cache: truncated HTML loads or Cloudflare challenge pages got cached as valid blank profiles. Fix: throw verification error in parser if info block is missing.
 - Mobile zoom input focus: focusing 13px inputs on mobile triggered browser auto-zoom, hiding the fixed filter FAB off-screen. Fix: set input font-size to 16px in mobile media query.
 - Uncached card filter leak: unscraped card thumbnails remained visible when non-search filters were active. Fix: hide uncached thumbnails when nonSearchFilterActive is true.
 - Unused dead code: Badges.remove() was defined but never used, and nonSearchFilterActive was assigned but never referenced. Fix: removed Badges.remove() and utilized nonSearchFilterActive.
-- Stale export version: `Cache.exportData` claimed `1.1.1` while build tools were on `1.1.3`. Fix: aligned version metadata to `1.1.3`.
+- Stale export version: `Cache.exportData` claimed `1.1.1` while build tools were on `1.1.3`. Fix: aligned version metadata (now `2.3.0`).
+- Votes always parsed as 10: `querySelector('small')` grabbed the `/10` helper inside `<strong>` instead of the votes sibling. Fix: select the `<small>` containing "votes".
+- Bust/waist/hips always null: measurements split on ASCII hyphen but live pages use en-dash. Fix: split on hyphen/en-dash/em-dash.
+- Stalled requests wedged the pump: no timeout meant a hung fetch leaked its concurrency slot. Fix: 30s `timeout` + `ontimeout` retry path.
+- Absolute vs relative hrefs double-fetched: `cleanUrl` only stripped relative `/babe/` prefixes. Fix: strip origin first.
+- RAF coalesce duplication: `scheduleFilterApply`/`scheduleTagRefresh` repeated the same pending-flag boilerplate. Fix: shared `coalesce` factory.
 - Unsaved filter settings on exit: debounced filter settings saves were lost on immediate tab close. Fix: added `pagehide` listener that flushes settings immediately.
 - Poisoned import settings: JSON imports did not perform validation and could crash card filters. Fix: added schema validator check to `importData`.
 - Redundant DOM queries during progress updates: ProgressBar queried header elements on every completion frame. Fix: added lazy title DOM reference caching.

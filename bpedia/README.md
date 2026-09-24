@@ -4,7 +4,7 @@
 
 A premium, high-performance userscript designed to inject advanced filtering capabilities and clean glassmorphic corner badges onto Babepedia list pages (e.g., Top 100, lists, category pages). 
 
-Lists on Babepedia only show names and thumbnails. This script sequentially scrapes biography pages in the background, extracts stats, caches them in extension storage, and provides a beautiful, responsive dual-drawer panel to filter and search performers in real-time.
+Lists on Babepedia only show names and thumbnails. This script scrapes biography pages in the background with a parallel queue (up to 4 concurrent), extracts stats, caches them in extension storage, and provides a beautiful, responsive single-drawer panel to filter and search performers in real-time.
 
 ---
 
@@ -13,7 +13,7 @@ Lists on Babepedia only show names and thumbnails. This script sequentially scra
 ### 1. Unified Filter & Settings Panel
 - **Filters View**: Segmented drawer with real-time controls for age, height, boobs type (natural/implants), profession (porn star/model only), ethnicities, hair colors, eye colors, cup sizes, performance acts (solo, girl/girl, boy/girl), minimum rating, and minimum favorites.
 - **Settings View**: Directly accessible inside the panel header, allowing customization of badge configuration (enable/disable specific badge types), backup export/import (single JSON backup), and clearing local databases.
-- **Apple Glassmorphic Design**: Clean blur saturation backdrops, responsive mobile drawer, smooth FAB icon, iOS-style toggle switches, and automatic dark mode synchronization (respects the site's `.lightsoff` class).
+- **Clean Solid Design**: Solid backgrounds, responsive mobile drawer, smooth FAB icon, iOS-style toggle switches, and automatic dark mode synchronization (respects the site's `.lightsoff` class).
 
 ### 2. High-Performance Filtering Pipeline
 - **Zero DOM Thrashing**: Corner badges are injected exactly once upon profile load and tagged via a `data-bp-badged` attribute. Show/hide states are controlled instantaneously via CSS parent class toggles on the `#thumbs` container.
@@ -22,7 +22,7 @@ Lists on Babepedia only show names and thumbnails. This script sequentially scra
 - **In-Memory Cache**: Active performer profiles are loaded into an in-memory `Map` once on load. Hot paths (like filtering on search keystrokes) read exclusively from memory.
 
 ### 3. Scraper Queue, Rate-Limit Resiliency & AutoPager Support
-- **Rate-Limit Resiliency**: Performs background fetches sequentially with a 250ms delay. If blocked or rate-limited (HTTP 429/403/503), it dynamically triggers incremental cooldowns and cycles the performer to the end of the queue, retrying up to 3 times.
+- **Rate-Limit Resiliency**: Performs background fetches with up to 4 concurrent requests and 60ms staggered starts. If blocked or rate-limited (HTTP 429/403/503), it dynamically triggers incremental cooldowns and cycles the performer to the end of the queue, retrying up to 3 times.
 - **AutoPager Compatibility**: A `MutationObserver` watches the list container and automatically queues newly appended performer cards, dynamically updating the progress counts.
 - **Robust Parsing**: Parses complex bio formats (metric/imperial unit conversions, bracketed nationality formats, custom cup mappings, etc.) cleanly, extracting names robustly on pages like birthdays.
 
@@ -36,13 +36,14 @@ bpedia/
 │   └── bpedia-filter.user.js  # Compiled userscript bundle ready for installation
 ├── src/
 │   ├── main.ts                # Entry point, queue coordinator, and autopager observer
-│   ├── style.css              # Apple iOS-style glassmorphism design tokens & styles
+│   ├── style.css              # Solid design tokens & styles
 │   ├── types.ts               # Interface schemas for profiles, filters, and settings
 │   ├── parser.ts              # DOMParser profile crawler and ISO-3166-1 country code mapping
 │   ├── cache.ts               # Storage layer wrapper (GM_getValue, GM_setValue, GM_deleteValue)
 │   └── ui/
 │       ├── progress.ts        # Dynamic top progress bar controller
 │       ├── badges.ts          # Corner badge template injection (Combined Cup + Boob status dot)
+│       ├── icons.ts           # Shared SVG icon factory
 │       └── filterPanel.ts     # Drawer controller, event handling, and filtering logic
 ├── package.json               # Developer scripts and dependencies (Vite, TypeScript)
 ├── tsconfig.json              # TypeScript compilation constraints

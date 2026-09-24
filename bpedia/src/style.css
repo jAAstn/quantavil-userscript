@@ -258,16 +258,7 @@ body.lightsoff .bp-icon-btn:hover {
   color: var(--bp-accent);
 }
 
-.bp-close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
+/* Close button shares .bp-icon-btn base styling (see markup); only the icon differs */
 .bp-close-btn svg {
   width: 20px;
   height: 20px;
@@ -612,14 +603,12 @@ body.lightsoff .bp-tag {
     width: 100vw;
     right: -100vw;
     border-left: none;
-    background: var(--bp-solid-bg);
   }
 
   .bp-fab {
     right: 15px;
     width: 48px;
     height: 48px;
-    background: var(--bp-solid-bg);
   }
 
   #bp-filter-fab {

@@ -136,11 +136,11 @@ export function parseProfileHtml(html: string, url: string, name: string): Perfo
         break;
       case 'measurements': {
         profile.body.measurements = value;
-        const parts = value.split('-');
-        if (parts.length === 3) {
-          profile.body.bust = parseInt(parts[0], 10) || null;
-          profile.body.waist = parseInt(parts[1], 10) || null;
-          profile.body.hips = parseInt(parts[2], 10) || null;
+        const mparts = value.match(/(\d+)\s*[-–—]\s*(\d+)\s*[-–—]\s*(\d+)/);
+        if (mparts) {
+          profile.body.bust = parseInt(mparts[1], 10) || null;
+          profile.body.waist = parseInt(mparts[2], 10) || null;
+          profile.body.hips = parseInt(mparts[3], 10) || null;
         }
         break;
       }
@@ -176,8 +176,10 @@ export function parseProfileHtml(html: string, url: string, name: string): Perfo
     const scoreMatch = scoreStr.match(/(\d+\.?\d*)/);
     if (scoreMatch) profile.rating.score = parseFloat(scoreMatch[1]);
 
-    const votesStr = ratingBox.querySelector('small')?.textContent || '';
-    const votesMatch = votesStr.match(/(\d+)/);
+    // The first <small> lives inside <strong> ("/10"); votes are in the sibling <small>
+    const smalls = Array.from(ratingBox.querySelectorAll('small'));
+    const votesEl = smalls.find((el) => /vote/i.test(el.textContent || '')) || smalls[smalls.length - 1];
+    const votesMatch = votesEl?.textContent?.match(/(\d+)/);
     if (votesMatch) profile.rating.votes = parseInt(votesMatch[1], 10);
   }
 
