@@ -1,12 +1,13 @@
 {
   "name": "bpedia-filter-userscript",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Babepedia Advanced Filter and Badges userscript",
   "main": "dist/bpedia-filter.user.js",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "bun test"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

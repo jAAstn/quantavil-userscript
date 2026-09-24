@@ -36,6 +36,10 @@ export function getCountryCode(nationality: string | null): string | null {
 const domParser = new DOMParser();
 
 export function parseProfileHtml(html: string, url: string, name: string): PerformerProfile {
+  if (html.includes('cf-chl-opt') || html.includes('challenge-platform') || /<title>\s*Just a moment\.\.\.\s*<\/title>/i.test(html)) {
+    throw new Error('Cloudflare challenge encountered.');
+  }
+
   const doc = domParser.parseFromString(html, 'text/html');
 
   const profile: PerformerProfile = {
@@ -55,7 +59,7 @@ export function parseProfileHtml(html: string, url: string, name: string): Perfo
     rating: { score: null, votes: null, favorites: null }
   };
 
-  const infoItems = doc.querySelectorAll('#personal-info-block .info-grid .info-item');
+  const infoItems = doc.querySelectorAll('#personal-info-block .info-item, .info-grid .info-item, #bioarea .info-item');
   if (infoItems.length === 0) {
     throw new Error('Verification failed: Personal info block is missing or empty.');
   }
@@ -75,14 +79,12 @@ export function parseProfileHtml(html: string, url: string, name: string): Perfo
       }
       case 'nationality': {
         // HTML: <span class="fi fi-us"></span> (American)
-        // textContent yields something like " (American)" or "🇺🇸 (American)"
-        // Extract the word inside parentheses, or fall back to last word
+        // Extract the word inside parentheses, or fall back to cleaned text
         const parenMatch = value.match(/\(([^)]+)\)/);
         if (parenMatch) {
           profile.personal.nationality = parenMatch[1].trim();
         } else {
-          // No parens — take the whole trimmed value
-          profile.personal.nationality = value;
+          profile.personal.nationality = value.replace(/[^\w\s-]/g, '').trim();
         }
         profile.personal.countryCode = getCountryCode(profile.personal.nationality);
         break;
@@ -136,7 +138,7 @@ export function parseProfileHtml(html: string, url: string, name: string): Perfo
         break;
       case 'measurements': {
         profile.body.measurements = value;
-        const mparts = value.match(/(\d+)\s*[-–—]\s*(\d+)\s*[-–—]\s*(\d+)/);
+        const mparts = value.match(/(\d+)\s*[-–—/]\s*(\d+)\s*[-–—/]\s*(\d+)/);
         if (mparts) {
           profile.body.bust = parseInt(mparts[1], 10) || null;
           profile.body.waist = parseInt(mparts[2], 10) || null;
@@ -145,14 +147,15 @@ export function parseProfileHtml(html: string, url: string, name: string): Perfo
         break;
       }
       case 'bra/cup size': {
-        const cupMatch = value.match(/\d+([A-Z]+)/i);
-        profile.body.cup = cupMatch ? cupMatch[1].toUpperCase() : value.trim();
+        const cleanVal = value.replace(/show\s*conversions.*/i, '').trim();
+        const cupMatch = cleanVal.match(/(?:\d+)?\s*([A-Za-z]+)/);
+        profile.body.cup = cupMatch ? cupMatch[1].toUpperCase() : null;
         break;
       }
       case 'boobs': {
         if (/real|natural/i.test(value)) {
           profile.body.boobs = 'Natural';
-        } else if (/implant|fake|augmented/i.test(value)) {
+        } else if (/implant|fake|augmented|enhanced/i.test(value)) {
           profile.body.boobs = 'Implants';
         }
         break;
@@ -179,14 +182,14 @@ export function parseProfileHtml(html: string, url: string, name: string): Perfo
     // The first <small> lives inside <strong> ("/10"); votes are in the sibling <small>
     const smalls = Array.from(ratingBox.querySelectorAll('small'));
     const votesEl = smalls.find((el) => /vote/i.test(el.textContent || '')) || smalls[smalls.length - 1];
-    const votesMatch = votesEl?.textContent?.match(/(\d+)/);
+    const votesMatch = votesEl?.textContent?.replace(/,/g, '').match(/(\d+)/);
     if (votesMatch) profile.rating.votes = parseInt(votesMatch[1], 10);
   }
 
   const favBox = doc.querySelector('.rating-fav');
   if (favBox) {
     const favStr = favBox.querySelector('div')?.textContent || '';
-    const favMatch = favStr.match(/(\d+)/);
+    const favMatch = favStr.replace(/,/g, '').match(/(\d+)/);
     if (favMatch) profile.rating.favorites = parseInt(favMatch[1], 10);
   }
 
@@ -194,7 +197,7 @@ export function parseProfileHtml(html: string, url: string, name: string): Perfo
 }
 
 export function extractPerformerName(thumb: HTMLElement, anchor?: HTMLAnchorElement | null): string {
-  const a = anchor || thumb.querySelector('a');
+  const a = anchor || thumb.querySelector<HTMLAnchorElement>('a[href*="/babe/"]') || thumb.querySelector('a');
   const url = a?.getAttribute('href') || '';
   let name = '';
   const textLink = thumb.querySelector('.thumbtext a');
@@ -210,5 +213,5 @@ export function extractPerformerName(thumb: HTMLElement, anchor?: HTMLAnchorElem
       name = a?.getAttribute('title')?.trim() || url.split('/').pop()?.replace(/_/g, ' ') || '';
     }
   }
-  return name.replace(/^#\d+:\s*/, '').trim();
+  return name.split('\n')[0].replace(/\s*\d+(?:\.\d+)?\/10.*$/, '').replace(/^#\d+:\s*/, '').trim();
 }

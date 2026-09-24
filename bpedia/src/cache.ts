@@ -80,7 +80,7 @@ export const Cache = {
   getFilterSettings(): FilterSettings {
     if (inMemoryFilterSettings) return inMemoryFilterSettings;
     const stored = GM_getValue<string | null>(FILTER_SETTINGS_KEY, null);
-    inMemoryFilterSettings = { ...DEFAULT_FILTER_SETTINGS, ...safeParse<Partial<FilterSettings>>(stored, {}) };
+    inMemoryFilterSettings = validateFilterSettings(safeParse<any>(stored, {}));
     return inMemoryFilterSettings;
   },
 
@@ -135,7 +135,6 @@ export const Cache = {
   },
 
   exportData(): string {
-    const allKeys = GM_listValues();
     const data: {
       version: string;
       exportedAt: number;
@@ -144,25 +143,15 @@ export const Cache = {
     } = {
       version: '2.3.0',
       exportedAt: Date.now(),
-      settings: {},
+      settings: {
+        [BADGE_SETTINGS_KEY]: this.getBadgeSettings(),
+        [FILTER_SETTINGS_KEY]: this.getFilterSettings()
+      },
       profiles: {}
     };
 
-    allKeys.forEach((key: string) => {
-      if (key.startsWith(PROFILE_PREFIX)) {
-        const clean = key.substring(PROFILE_PREFIX.length);
-        const val = GM_getValue<string | null>(key, null);
-        const parsed = safeParse<any>(val, null);
-        if (parsed) {
-          data.profiles[clean] = parsed;
-        }
-      } else if (key === BADGE_SETTINGS_KEY || key === FILTER_SETTINGS_KEY) {
-        const val = GM_getValue<string | null>(key, null);
-        const parsed = safeParse<any>(val, null);
-        if (parsed) {
-          data.settings[key] = parsed;
-        }
-      }
+    dbCache.forEach((profile, clean) => {
+      data.profiles[clean] = profile;
     });
 
     return JSON.stringify(data, null, 2);
@@ -175,14 +164,12 @@ export const Cache = {
 
       // Import profiles
       if (data.profiles && typeof data.profiles === 'object') {
-        Object.entries(data.profiles).forEach(([cleanUrl, profile]) => {
-          const key = PROFILE_PREFIX + cleanUrl;
+        Object.entries(data.profiles).forEach(([rawUrl, profile]) => {
+          const clean = cleanUrl(rawUrl);
+          const key = PROFILE_PREFIX + clean;
           if (profile && typeof profile === 'object') {
             GM_setValue(key, JSON.stringify(profile));
-            const parsed = safeParse<PerformerProfile | null>(JSON.stringify(profile), null);
-            if (parsed) {
-              dbCache.set(cleanUrl, parsed);
-            }
+            dbCache.set(clean, profile as PerformerProfile);
           }
         });
       }
@@ -210,7 +197,7 @@ export const Cache = {
   }
 };
 
-function validateFilterSettings(input: any): FilterSettings {
+export function validateFilterSettings(input: any): FilterSettings {
   const res = { ...DEFAULT_FILTER_SETTINGS };
   if (!input || typeof input !== 'object') return res;
 
@@ -232,7 +219,13 @@ function validateFilterSettings(input: any): FilterSettings {
   return res;
 }
 
-
-function cleanUrl(url: string): string {
-  return url.replace(/^https?:\/\/[^/]+/, '').replace(/^\/babe\//, '').replace(/\/$/, '');
+export function cleanUrl(url: string): string {
+  if (!url) return '';
+  return url
+    .replace(/^https?:\/\/[^/]+/, '')
+    .split('?')[0]
+    .split('#')[0]
+    .replace(/^\/?babe\//, '')
+    .replace(/^\//, '')
+    .replace(/\/$/, '');
 }

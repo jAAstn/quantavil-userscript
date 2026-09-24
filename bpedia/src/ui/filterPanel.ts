@@ -1,4 +1,4 @@
-import { Cache } from '../cache';
+import { Cache, cleanUrl } from '../cache';
 import { FilterSettings, BadgeSettings, PerformerProfile } from '../types';
 import { Badges } from './badges';
 import { icon } from './icons';
@@ -319,8 +319,14 @@ export const FilterPanel = {
     [['bp-min-age', 'bp-max-age'], ['bp-min-height', 'bp-max-height']].forEach(([minId, maxId]) => {
       const minEl = document.getElementById(minId) as HTMLInputElement;
       const maxEl = document.getElementById(maxId) as HTMLInputElement;
-      minEl?.addEventListener('input', () => { if (+minEl.value > +maxEl.value) maxEl.value = minEl.value; });
-      maxEl?.addEventListener('input', () => { if (+maxEl.value < +minEl.value) minEl.value = maxEl.value; });
+      minEl?.addEventListener('input', () => {
+        if (+minEl.value > +maxEl.value) maxEl.value = minEl.value;
+        this.updateLabelBubbles();
+      });
+      maxEl?.addEventListener('input', () => {
+        if (+maxEl.value < +minEl.value) minEl.value = maxEl.value;
+        this.updateLabelBubbles();
+      });
     });
 
     // Centralized filter state save function
@@ -554,6 +560,13 @@ export const FilterPanel = {
       p.performances.boyGirl.forEach((a) => { if (a && !knownPerformances.has(a)) newPerfs.add(a); });
     });
 
+    // Ensure active filters from cache are also present in tag options so they can be toggled
+    activeFilters.ethnicities.forEach((v) => { if (v && !knownEthnicities.has(v)) newEth.add(v); });
+    activeFilters.hairColors.forEach((v) => { if (v && !knownHairColors.has(v)) newHair.add(v); });
+    activeFilters.eyeColors.forEach((v) => { if (v && !knownEyeColors.has(v)) newEyes.add(v); });
+    activeFilters.cupSizes.forEach((v) => { if (v && !knownCups.has(v)) newCups.add(v); });
+    activeFilters.performances.forEach((v) => { if (v && !knownPerformances.has(v)) newPerfs.add(v); });
+
     // Append only new tags
     this.appendTags('bp-ethnicities-container', newEth, knownEthnicities, activeFilters.ethnicities);
     this.appendTags('bp-hair-container', newHair, knownHairColors, activeFilters.hairColors);
@@ -620,22 +633,18 @@ export const FilterPanel = {
     const filters = Cache.getFilterSettings();
     const badgeSettings = Cache.getBadgeSettings();
 
-    // Toggle badge CSS visibility flags once on parent container (Avoid thrashing)
-    const thumbsContainer = document.getElementById('thumbs');
-    if (thumbsContainer) {
-      const hideAll = !badgeSettings.showAge && !badgeSettings.showCupBoobs && !badgeSettings.showCountry;
-      thumbsContainer.classList.toggle('bp-hide-badges', hideAll);
-      thumbsContainer.classList.toggle('bp-hide-age', !badgeSettings.showAge);
-      thumbsContainer.classList.toggle('bp-hide-cup-boobs', !badgeSettings.showCupBoobs);
-      thumbsContainer.classList.toggle('bp-hide-country', !badgeSettings.showCountry);
-    }
+    // Toggle badge CSS visibility flags once on body (universal across all containers)
+    const hideAll = !badgeSettings.showAge && !badgeSettings.showCupBoobs && !badgeSettings.showCountry;
+    document.body.classList.toggle('bp-hide-badges', hideAll);
+    document.body.classList.toggle('bp-hide-age', !badgeSettings.showAge);
+    document.body.classList.toggle('bp-hide-cup-boobs', !badgeSettings.showCupBoobs);
+    document.body.classList.toggle('bp-hide-country', !badgeSettings.showCountry);
 
     const thumbshots = document.querySelectorAll('.thumbshot');
     let matchCount = 0;
     let totalCount = 0;
 
     const activeFilterCount = this.getActiveFiltersCount(filters);
-    const nonSearchFilterActive = activeFilterCount - (filters.searchQuery ? 1 : 0) > 0;
     
     // Hoist range check function
     const inRange = (val: number | null, min: number, max: number, active: boolean) =>
@@ -643,24 +652,27 @@ export const FilterPanel = {
 
     thumbshots.forEach((thumb) => {
       const el = thumb as HTMLElement;
-      const anchor = el.querySelector('a');
+      if (
+        el.closest('aside, .sidebar') ||
+        el.classList.contains('menuthumb') ||
+        el.classList.contains('thumbshotsmall')
+      ) {
+        return;
+      }
+
+      const anchor = el.querySelector<HTMLAnchorElement>('a[href*="/babe/"]') || el.querySelector<HTMLAnchorElement>('a');
       if (!anchor) return;
-      const url = anchor.getAttribute('href');
-      if (!url) return;
+      const rawUrl = anchor.getAttribute('href');
+      if (!rawUrl) return;
+
+      const slug = el.getAttribute('data-bp-slug') || cleanUrl(rawUrl);
+      if (!slug) return;
 
       totalCount++;
-      const profile = cachedProfiles.get(url);
+      const profile = cachedProfiles.get(slug);
 
       if (!profile) {
-        // Unscraped profile
-        // If non-search filters are active, hide the card since we don't know if it matches yet
-        if (nonSearchFilterActive) {
-          el.style.display = 'none';
-          return;
-        }
-
-        // Keep unscraped thumbnails visible until they are actually scraped and fail the criteria
-        // Dim them slightly to indicate they are loading/unscraped
+        // Unscraped profile: keep visible but dimmed to indicate loading state
         el.style.opacity = '0.5';
 
         // Read performer name from attribute to avoid costly DOM scraping on every keystroke
@@ -682,7 +694,7 @@ export const FilterPanel = {
 
       // Apply filter conditions
       const q = filters.searchQuery.toLowerCase();
-      const isPornstar = profile.personal.professions.some(p => p.includes('porn star') || p.includes('pornstar'));
+      const isPornstar = profile.personal.professions.some(p => /porn|adult\s*(film|movie|actress|star)/i.test(p));
       const allActs = [
         ...profile.performances.solo,
         ...profile.performances.girlGirl,

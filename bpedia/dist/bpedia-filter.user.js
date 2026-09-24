@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Babepedia Advanced Filter & Badges
 // @namespace    quantavil/bpedia
-// @version      2.3.0
+// @version      2.4.0
 // @author       quantavil
 // @description  Advanced filtering and on-thumbnail stats/badges for Babepedia list pages with dynamic progress scraper and responsive Apple Glassmorphic UI.
 // @license      MIT
@@ -34,7 +34,7 @@
 	var _GM_listValues = (() => typeof GM_listValues != "undefined" ? GM_listValues : void 0)();
 	var _GM_setValue = (() => typeof GM_setValue != "undefined" ? GM_setValue : void 0)();
 	var _GM_xmlhttpRequest = (() => typeof GM_xmlhttpRequest != "undefined" ? GM_xmlhttpRequest : void 0)();
-	_css(":root{--bp-glass-bg:#fdf6f0bf;--bp-solid-bg:#fdf6f0;--bp-glass-border:#ab520b2e;--bp-glass-shadow:#ab520b14;--bp-text:#272727;--bp-accent:#ab520b;--bp-accent-glow:#ab520b4d;--bp-success:#2e7d32;--bp-danger:#c62828}body.lightsoff{--bp-glass-bg:#1c1a19d9;--bp-solid-bg:#1c1a19;--bp-glass-border:#ffffff14;--bp-glass-shadow:#0006;--bp-text:#e0e0e0;--bp-accent:#ff973c;--bp-accent-glow:#ff973c4d;--bp-success:#4caf50;--bp-danger:#ef5350}.thumbshot{position:relative!important}.thumbshot>a{display:block;position:relative;overflow:hidden}.bp-badge{z-index:15;color:var(--bp-text);background:var(--bp-solid-bg);border:1px solid var(--bp-glass-border);box-shadow:0 2px 8px var(--bp-glass-shadow);pointer-events:none;border-radius:4px;align-items:center;gap:3px;padding:2px 6px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:10px;font-weight:700;transition:opacity .2s,transform .2s;display:inline-flex;position:absolute}.bp-badge svg{vertical-align:middle;display:inline-block}.bp-badge span{vertical-align:middle}.bp-badge-top-left{top:4px;left:4px}#thumbs.bp-hide-badges .bp-badge,#thumbs.bp-hide-age .bp-badge-top-left,#thumbs.bp-hide-cup-boobs .bp-badge-bottom-left,#thumbs.bp-hide-country .bp-badge-bottom-right{display:none!important}.bp-badge-bottom-left{bottom:6px;left:4px}.bp-badge-bottom-right{bottom:6px;right:4px}.thumbtext{z-index:10;position:relative}#bp-backdrop{z-index:9997;-webkit-backdrop-filter:blur(2px);opacity:0;pointer-events:none;background:#0000004d;transition:opacity .3s;position:fixed;inset:0}#bp-backdrop.active{opacity:1;pointer-events:auto}.bp-fab{z-index:9999;cursor:pointer;width:52px;height:52px;color:var(--bp-text);background:var(--bp-solid-bg);border:1px solid var(--bp-glass-border);box-shadow:0 8px 32px var(--bp-glass-shadow);border-radius:50%;justify-content:center;align-items:center;transition:transform .3s cubic-bezier(.175,.885,.32,1.275),box-shadow .3s,border-color .3s;display:flex;position:fixed;right:20px}.bp-fab:hover{box-shadow:0 8px 32px var(--bp-accent-glow);transform:scale(1.08)}.bp-fab:active{transform:scale(.95)}.bp-fab.active{border-color:var(--bp-accent);color:var(--bp-accent)}.bp-fab:focus-visible{border-color:var(--bp-accent);box-shadow:0 0 0 2px var(--bp-solid-bg), 0 0 0 4px var(--bp-accent);outline:none}.bp-fab svg{width:24px;height:24px;fill:var(--bp-text);transition:fill .3s}.bp-fab.active svg{fill:var(--bp-accent)}#bp-filter-fab{bottom:20px}.bp-fab-badge{background:var(--bp-accent);color:#fff;border-radius:50%;justify-content:center;align-items:center;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;position:absolute;top:-2px;right:-2px;box-shadow:0 2px 6px #0003}.bp-drawer{z-index:9998;box-sizing:border-box;background:var(--bp-solid-bg);border-left:1px solid var(--bp-glass-border);width:330px;height:100vh;box-shadow:-10px 0 30px var(--bp-glass-shadow);color:var(--bp-text);flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;transition:right .4s cubic-bezier(.16,1,.3,1);display:flex;position:fixed;top:0;right:-360px}.bp-drawer.open{right:0}.bp-drawer-header{border-bottom:1px solid var(--bp-glass-border);justify-content:space-between;align-items:center;padding:18px 20px;display:flex}.bp-drawer-header h3{letter-spacing:-.5px;margin:0;font-size:18px;font-weight:700}.bp-header-actions{align-items:center;gap:8px;display:flex}.bp-icon-btn{cursor:pointer;color:var(--bp-text);background:0 0;border:none;border-radius:4px;justify-content:center;align-items:center;padding:4px;transition:background-color .2s,color .2s;display:flex}.bp-icon-btn:hover{color:var(--bp-accent);background:#ab520b1a}body.lightsoff .bp-icon-btn:hover{color:var(--bp-accent);background:#ff973c26}.bp-close-btn svg{width:20px;height:20px;stroke:var(--bp-text)}.bp-drawer-body{flex:1;padding:15px 20px 80px;overflow-y:auto}.bp-status-line{text-align:center;color:var(--bp-accent);border:1px solid var(--bp-glass-border);background:#ab520b14;border-radius:6px;margin-bottom:12px;padding:8px 12px;font-size:12px;font-weight:700}.bp-section{border-bottom:1px solid #ab520b14;margin-bottom:20px;padding-bottom:15px}.bp-section-title{text-transform:uppercase;letter-spacing:.8px;color:var(--bp-accent);justify-content:space-between;align-items:center;margin-bottom:12px;font-size:13px;font-weight:700;display:flex}.bp-input-group{margin-bottom:12px}.bp-input-group label{opacity:.85;margin-bottom:4px;font-size:11px;font-weight:600;display:block}.bp-text-input{box-sizing:border-box;border:1px solid var(--bp-glass-border);width:100%;color:var(--bp-text);background:#ffffff26;border-radius:6px;outline:none;padding:8px 12px;font-size:13px;transition:border-color .2s}body.lightsoff .bp-text-input{background:#0003}.bp-text-input:focus{border-color:var(--bp-accent)}.bp-icon-btn:focus-visible,.bp-close-btn:focus-visible,.bp-segmented-btn:focus-visible,.bp-tag:focus-visible,.bp-btn-danger:focus-visible,.bp-btn-reset:focus-visible,.bp-text-input:focus-visible{outline:2px solid var(--bp-accent);outline-offset:2px}.bp-range-display{float:right;font-size:12px;font-weight:700}.bp-slider{-webkit-appearance:none;background:#ab520b26;border-radius:2px;outline:none;width:100%;height:4px}.bp-slider::-webkit-slider-thumb{appearance:none;background:var(--bp-accent);cursor:pointer;border:1px solid #ffffff80;border-radius:50%;width:16px;height:16px;transition:transform .1s;box-shadow:0 1px 4px #0003}.bp-slider::-webkit-slider-thumb:hover{transform:scale(1.15)}.bp-segmented{border:1px solid var(--bp-glass-border);background:#0000000d;border-radius:6px;margin-top:4px;display:flex;overflow:hidden}body.lightsoff .bp-segmented{background:#ffffff0d}.bp-segmented-btn{color:var(--bp-text);cursor:pointer;text-align:center;background:0 0;border:none;flex:1;padding:8px;font-size:11px;font-weight:600;transition:background .2s,color .2s}.bp-segmented-btn:not(:last-child){border-right:1px solid var(--bp-glass-border)}.bp-segmented-btn.active{background:var(--bp-accent);color:#fff}.bp-switch-row{justify-content:space-between;align-items:center;margin-bottom:10px;display:flex}.bp-switch-row label{font-size:12px;font-weight:600}.bp-switch{width:44px;height:24px;display:inline-block;position:relative}.bp-switch input{opacity:0;width:0;height:0}.bp-switch-slider{cursor:pointer;border:1px solid var(--bp-glass-border);background-color:#0000001a;border-radius:24px;transition:all .3s;position:absolute;inset:0}body.lightsoff .bp-switch-slider{background-color:#ffffff1a}.bp-switch-slider:before{content:\"\";background-color:#fff;border-radius:50%;width:18px;height:18px;transition:all .3s;position:absolute;bottom:2px;left:2px;box-shadow:0 1px 3px #0003}.bp-switch input:checked+.bp-switch-slider{background-color:var(--bp-success)}.bp-switch input:checked+.bp-switch-slider:before{transform:translate(20px)}.bp-tag-container{border:1px solid var(--bp-glass-border);background:#00000008;border-radius:6px;flex-wrap:wrap;gap:6px;max-height:120px;padding:5px;display:flex;overflow-y:auto}body.lightsoff .bp-tag-container{background:#ffffff05}.bp-tag{border:1px solid var(--bp-glass-border);cursor:pointer;-webkit-user-select:none;user-select:none;color:var(--bp-text);background:#fff3;border-radius:12px;padding:4px 8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:11px;transition:all .2s}body.lightsoff .bp-tag{background:#0003}.bp-tag.active{background:var(--bp-accent);color:#fff;border-color:var(--bp-accent)}#bp-progress-bar-container{z-index:10000;opacity:0;pointer-events:none;background:#0000000d;width:100%;height:3px;transition:opacity .4s;position:fixed;top:0;left:0}#bp-progress-bar-container.active{opacity:1}#bp-progress-bar{background:linear-gradient(90deg, var(--bp-accent), var(--bp-success));width:0%;height:100%;transition:width .3s}.bp-btn-danger{border:1px solid var(--bp-danger);width:100%;color:var(--bp-danger);cursor:pointer;background:#c6282826;border-radius:6px;padding:10px;font-weight:700;transition:background .2s}.bp-btn-danger:hover{background:var(--bp-danger);color:#fff}.bp-btn-reset{border:1px solid var(--bp-glass-border);width:100%;color:var(--bp-text);cursor:pointer;background:#ab520b14;border-radius:6px;padding:10px;font-size:13px;font-weight:600;transition:background .2s,border-color .2s}.bp-btn-reset:hover{background:var(--bp-accent);border-color:var(--bp-accent);color:#fff}.sr-only{clip:rect(0, 0, 0, 0);white-space:nowrap;border:0;width:1px;height:1px;margin:-1px;padding:0;position:absolute;overflow:hidden}@media (width<=600px){.bp-drawer{border-left:none;width:100vw;right:-100vw}.bp-fab{width:48px;height:48px;right:15px}#bp-filter-fab{bottom:15px}.bp-text-input{font-size:16px}}@media (prefers-reduced-motion:reduce){.bp-drawer,.bp-fab,.bp-badge,.bp-switch-slider,.bp-switch-slider:before{transition:none!important}}");
+	_css(":root{--bp-glass-bg:#fdf6f0bf;--bp-solid-bg:#fdf6f0;--bp-glass-border:#ab520b2e;--bp-glass-shadow:#ab520b14;--bp-text:#272727;--bp-accent:#ab520b;--bp-accent-glow:#ab520b4d;--bp-success:#2e7d32;--bp-danger:#c62828}body.lightsoff{--bp-glass-bg:#1c1a19d9;--bp-solid-bg:#1c1a19;--bp-glass-border:#ffffff14;--bp-glass-shadow:#0006;--bp-text:#e0e0e0;--bp-accent:#ff973c;--bp-accent-glow:#ff973c4d;--bp-success:#4caf50;--bp-danger:#ef5350}.thumbshot{position:relative!important}.thumbshot>a{display:block;position:relative;overflow:hidden}.bp-badge{z-index:15;color:var(--bp-text);background:var(--bp-solid-bg);border:1px solid var(--bp-glass-border);box-shadow:0 2px 8px var(--bp-glass-shadow);pointer-events:none;border-radius:4px;align-items:center;gap:3px;padding:2px 6px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:10px;font-weight:700;transition:opacity .2s,transform .2s;display:inline-flex;position:absolute}.bp-badge svg{vertical-align:middle;display:inline-block}.bp-badge span{vertical-align:middle}.bp-badge-top-left{top:4px;left:4px}body.bp-hide-badges .bp-badge,#thumbs.bp-hide-badges .bp-badge,body.bp-hide-age .bp-badge-top-left,#thumbs.bp-hide-age .bp-badge-top-left,body.bp-hide-cup-boobs .bp-badge-bottom-left,#thumbs.bp-hide-cup-boobs .bp-badge-bottom-left,body.bp-hide-country .bp-badge-bottom-right,#thumbs.bp-hide-country .bp-badge-bottom-right{display:none!important}.bp-badge-bottom-left{bottom:6px;left:4px}.bp-badge-bottom-right{bottom:6px;right:4px}.thumbtext{z-index:10;position:relative}#bp-backdrop{z-index:9997;-webkit-backdrop-filter:blur(2px);opacity:0;pointer-events:none;background:#0000004d;transition:opacity .3s;position:fixed;inset:0}#bp-backdrop.active{opacity:1;pointer-events:auto}.bp-fab{z-index:9999;cursor:pointer;width:52px;height:52px;color:var(--bp-text);background:var(--bp-solid-bg);border:1px solid var(--bp-glass-border);box-shadow:0 8px 32px var(--bp-glass-shadow);border-radius:50%;justify-content:center;align-items:center;transition:transform .3s cubic-bezier(.175,.885,.32,1.275),box-shadow .3s,border-color .3s;display:flex;position:fixed;right:20px}.bp-fab:hover{box-shadow:0 8px 32px var(--bp-accent-glow);transform:scale(1.08)}.bp-fab:active{transform:scale(.95)}.bp-fab.active{border-color:var(--bp-accent);color:var(--bp-accent)}.bp-fab:focus-visible{border-color:var(--bp-accent);box-shadow:0 0 0 2px var(--bp-solid-bg), 0 0 0 4px var(--bp-accent);outline:none}.bp-fab svg{width:24px;height:24px;fill:var(--bp-text);transition:fill .3s}.bp-fab.active svg{fill:var(--bp-accent)}#bp-filter-fab{bottom:20px}.bp-fab-badge{background:var(--bp-accent);color:#fff;border-radius:50%;justify-content:center;align-items:center;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;position:absolute;top:-2px;right:-2px;box-shadow:0 2px 6px #0003}.bp-drawer{z-index:9998;box-sizing:border-box;background:var(--bp-solid-bg);border-left:1px solid var(--bp-glass-border);width:330px;height:100vh;box-shadow:-10px 0 30px var(--bp-glass-shadow);color:var(--bp-text);flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;transition:right .4s cubic-bezier(.16,1,.3,1);display:flex;position:fixed;top:0;right:-360px}.bp-drawer.open{right:0}.bp-drawer-header{border-bottom:1px solid var(--bp-glass-border);justify-content:space-between;align-items:center;padding:18px 20px;display:flex}.bp-drawer-header h3{letter-spacing:-.5px;margin:0;font-size:18px;font-weight:700}.bp-header-actions{align-items:center;gap:8px;display:flex}.bp-icon-btn{cursor:pointer;color:var(--bp-text);background:0 0;border:none;border-radius:4px;justify-content:center;align-items:center;padding:4px;transition:background-color .2s,color .2s;display:flex}.bp-icon-btn:hover{color:var(--bp-accent);background:#ab520b1a}body.lightsoff .bp-icon-btn:hover{color:var(--bp-accent);background:#ff973c26}.bp-close-btn svg{width:20px;height:20px;stroke:var(--bp-text)}.bp-drawer-body{flex:1;padding:15px 20px 80px;overflow-y:auto}.bp-status-line{text-align:center;color:var(--bp-accent);border:1px solid var(--bp-glass-border);background:#ab520b14;border-radius:6px;margin-bottom:12px;padding:8px 12px;font-size:12px;font-weight:700}.bp-section{border-bottom:1px solid #ab520b14;margin-bottom:20px;padding-bottom:15px}.bp-section-title{text-transform:uppercase;letter-spacing:.8px;color:var(--bp-accent);justify-content:space-between;align-items:center;margin-bottom:12px;font-size:13px;font-weight:700;display:flex}.bp-input-group{margin-bottom:12px}.bp-input-group label{opacity:.85;margin-bottom:4px;font-size:11px;font-weight:600;display:block}.bp-text-input{box-sizing:border-box;border:1px solid var(--bp-glass-border);width:100%;color:var(--bp-text);background:#ffffff26;border-radius:6px;outline:none;padding:8px 12px;font-size:13px;transition:border-color .2s}body.lightsoff .bp-text-input{background:#0003}.bp-text-input:focus{border-color:var(--bp-accent)}.bp-icon-btn:focus-visible,.bp-close-btn:focus-visible,.bp-segmented-btn:focus-visible,.bp-tag:focus-visible,.bp-btn-danger:focus-visible,.bp-btn-reset:focus-visible,.bp-text-input:focus-visible{outline:2px solid var(--bp-accent);outline-offset:2px}.bp-range-display{float:right;font-size:12px;font-weight:700}.bp-slider{-webkit-appearance:none;background:#ab520b26;border-radius:2px;outline:none;width:100%;height:4px}.bp-slider::-webkit-slider-thumb{appearance:none;background:var(--bp-accent);cursor:pointer;border:1px solid #ffffff80;border-radius:50%;width:16px;height:16px;transition:transform .1s;box-shadow:0 1px 4px #0003}.bp-slider::-webkit-slider-thumb:hover{transform:scale(1.15)}.bp-segmented{border:1px solid var(--bp-glass-border);background:#0000000d;border-radius:6px;margin-top:4px;display:flex;overflow:hidden}body.lightsoff .bp-segmented{background:#ffffff0d}.bp-segmented-btn{color:var(--bp-text);cursor:pointer;text-align:center;background:0 0;border:none;flex:1;padding:8px;font-size:11px;font-weight:600;transition:background .2s,color .2s}.bp-segmented-btn:not(:last-child){border-right:1px solid var(--bp-glass-border)}.bp-segmented-btn.active{background:var(--bp-accent);color:#fff}.bp-switch-row{justify-content:space-between;align-items:center;margin-bottom:10px;display:flex}.bp-switch-row label{font-size:12px;font-weight:600}.bp-switch{width:44px;height:24px;display:inline-block;position:relative}.bp-switch input{opacity:0;width:0;height:0}.bp-switch-slider{cursor:pointer;border:1px solid var(--bp-glass-border);background-color:#0000001a;border-radius:24px;transition:all .3s;position:absolute;inset:0}body.lightsoff .bp-switch-slider{background-color:#ffffff1a}.bp-switch-slider:before{content:\"\";background-color:#fff;border-radius:50%;width:18px;height:18px;transition:all .3s;position:absolute;bottom:2px;left:2px;box-shadow:0 1px 3px #0003}.bp-switch input:checked+.bp-switch-slider{background-color:var(--bp-success)}.bp-switch input:checked+.bp-switch-slider:before{transform:translate(20px)}.bp-tag-container{border:1px solid var(--bp-glass-border);background:#00000008;border-radius:6px;flex-wrap:wrap;gap:6px;max-height:120px;padding:5px;display:flex;overflow-y:auto}body.lightsoff .bp-tag-container{background:#ffffff05}.bp-tag{border:1px solid var(--bp-glass-border);cursor:pointer;-webkit-user-select:none;user-select:none;color:var(--bp-text);background:#fff3;border-radius:12px;padding:4px 8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:11px;transition:all .2s}body.lightsoff .bp-tag{background:#0003}.bp-tag.active{background:var(--bp-accent);color:#fff;border-color:var(--bp-accent)}#bp-progress-bar-container{z-index:10000;opacity:0;pointer-events:none;background:#0000000d;width:100%;height:3px;transition:opacity .4s;position:fixed;top:0;left:0}#bp-progress-bar-container.active{opacity:1}#bp-progress-bar{background:linear-gradient(90deg, var(--bp-accent), var(--bp-success));width:0%;height:100%;transition:width .3s}.bp-btn-danger{border:1px solid var(--bp-danger);width:100%;color:var(--bp-danger);cursor:pointer;background:#c6282826;border-radius:6px;padding:10px;font-weight:700;transition:background .2s}.bp-btn-danger:hover{background:var(--bp-danger);color:#fff}.bp-btn-reset{border:1px solid var(--bp-glass-border);width:100%;color:var(--bp-text);cursor:pointer;background:#ab520b14;border-radius:6px;padding:10px;font-size:13px;font-weight:600;transition:background .2s,border-color .2s}.bp-btn-reset:hover{background:var(--bp-accent);border-color:var(--bp-accent);color:#fff}.sr-only{clip:rect(0, 0, 0, 0);white-space:nowrap;border:0;width:1px;height:1px;margin:-1px;padding:0;position:absolute;overflow:hidden}@media (width<=600px){.bp-drawer{border-left:none;width:100vw;right:-100vw}.bp-fab{width:48px;height:48px;right:15px}#bp-filter-fab{bottom:15px}.bp-text-input{font-size:16px}}@media (prefers-reduced-motion:reduce){.bp-drawer,.bp-fab,.bp-badge,.bp-switch-slider,.bp-switch-slider:before{transition:none!important}}");
 	var PROFILE_PREFIX = "bprof_";
 	var BADGE_SETTINGS_KEY = "badge_settings";
 	var FILTER_SETTINGS_KEY = "filter_settings";
@@ -102,11 +102,7 @@
 		},
 		getFilterSettings() {
 			if (inMemoryFilterSettings) return inMemoryFilterSettings;
-			const stored = _GM_getValue(FILTER_SETTINGS_KEY, null);
-			inMemoryFilterSettings = {
-				...DEFAULT_FILTER_SETTINGS,
-				...safeParse(stored, {})
-			};
+			inMemoryFilterSettings = validateFilterSettings(safeParse(_GM_getValue(FILTER_SETTINGS_KEY, null), {}));
 			return inMemoryFilterSettings;
 		},
 		setFilterSettings(settings, debounce = false) {
@@ -150,22 +146,17 @@
 			console.log("[BP Filter] Cleared all storage");
 		},
 		exportData() {
-			const allKeys = _GM_listValues();
 			const data = {
 				version: "2.3.0",
 				exportedAt: Date.now(),
-				settings: {},
+				settings: {
+					[BADGE_SETTINGS_KEY]: this.getBadgeSettings(),
+					[FILTER_SETTINGS_KEY]: this.getFilterSettings()
+				},
 				profiles: {}
 			};
-			allKeys.forEach((key) => {
-				if (key.startsWith(PROFILE_PREFIX)) {
-					const clean = key.substring(6);
-					const parsed = safeParse(_GM_getValue(key, null), null);
-					if (parsed) data.profiles[clean] = parsed;
-				} else if (key === BADGE_SETTINGS_KEY || key === FILTER_SETTINGS_KEY) {
-					const parsed = safeParse(_GM_getValue(key, null), null);
-					if (parsed) data.settings[key] = parsed;
-				}
+			dbCache.forEach((profile, clean) => {
+				data.profiles[clean] = profile;
 			});
 			return JSON.stringify(data, null, 2);
 		},
@@ -173,12 +164,12 @@
 			try {
 				const data = JSON.parse(jsonString);
 				if (!data || typeof data !== "object") return false;
-				if (data.profiles && typeof data.profiles === "object") Object.entries(data.profiles).forEach(([cleanUrl, profile]) => {
-					const key = PROFILE_PREFIX + cleanUrl;
+				if (data.profiles && typeof data.profiles === "object") Object.entries(data.profiles).forEach(([rawUrl, profile]) => {
+					const clean = cleanUrl(rawUrl);
+					const key = PROFILE_PREFIX + clean;
 					if (profile && typeof profile === "object") {
 						_GM_setValue(key, JSON.stringify(profile));
-						const parsed = safeParse(JSON.stringify(profile), null);
-						if (parsed) dbCache.set(cleanUrl, parsed);
+						dbCache.set(clean, profile);
 					}
 				});
 				if (data.settings && typeof data.settings === "object") Object.entries(data.settings).forEach(([key, val]) => {
@@ -225,7 +216,8 @@
 		return res;
 	}
 	function cleanUrl(url) {
-		return url.replace(/^https?:\/\/[^/]+/, "").replace(/^\/babe\//, "").replace(/\/$/, "");
+		if (!url) return "";
+		return url.replace(/^https?:\/\/[^/]+/, "").split("?")[0].split("#")[0].replace(/^\/?babe\//, "").replace(/^\//, "").replace(/\/$/, "");
 	}
 	var NATIONALITY_MAP = {
 		american: "US",
@@ -328,6 +320,7 @@
 	}
 	var domParser = new DOMParser();
 	function parseProfileHtml(html, url, name) {
+		if (html.includes("cf-chl-opt") || html.includes("challenge-platform") || /<title>\s*Just a moment\.\.\.\s*<\/title>/i.test(html)) throw new Error("Cloudflare challenge encountered.");
 		const doc = domParser.parseFromString(html, "text/html");
 		const profile = {
 			name,
@@ -365,7 +358,7 @@
 				favorites: null
 			}
 		};
-		const infoItems = doc.querySelectorAll("#personal-info-block .info-grid .info-item");
+		const infoItems = doc.querySelectorAll("#personal-info-block .info-item, .info-grid .info-item, #bioarea .info-item");
 		if (infoItems.length === 0) throw new Error("Verification failed: Personal info block is missing or empty.");
 		infoItems.forEach((item) => {
 			const labelEl = item.querySelector(".label");
@@ -382,7 +375,7 @@
 				case "nationality": {
 					const parenMatch = value.match(/\(([^)]+)\)/);
 					if (parenMatch) profile.personal.nationality = parenMatch[1].trim();
-					else profile.personal.nationality = value;
+					else profile.personal.nationality = value.replace(/[^\w\s-]/g, "").trim();
 					profile.personal.countryCode = getCountryCode(profile.personal.nationality);
 					break;
 				}
@@ -428,7 +421,7 @@
 					break;
 				case "measurements": {
 					profile.body.measurements = value;
-					const mparts = value.match(/(\d+)\s*[-–—]\s*(\d+)\s*[-–—]\s*(\d+)/);
+					const mparts = value.match(/(\d+)\s*[-–—/]\s*(\d+)\s*[-–—/]\s*(\d+)/);
 					if (mparts) {
 						profile.body.bust = parseInt(mparts[1], 10) || null;
 						profile.body.waist = parseInt(mparts[2], 10) || null;
@@ -437,13 +430,13 @@
 					break;
 				}
 				case "bra/cup size": {
-					const cupMatch = value.match(/\d+([A-Z]+)/i);
-					profile.body.cup = cupMatch ? cupMatch[1].toUpperCase() : value.trim();
+					const cupMatch = value.replace(/show\s*conversions.*/i, "").trim().match(/(?:\d+)?\s*([A-Za-z]+)/);
+					profile.body.cup = cupMatch ? cupMatch[1].toUpperCase() : null;
 					break;
 				}
 				case "boobs":
 					if (/real|natural/i.test(value)) profile.body.boobs = "Natural";
-					else if (/implant|fake|augmented/i.test(value)) profile.body.boobs = "Implants";
+					else if (/implant|fake|augmented|enhanced/i.test(value)) profile.body.boobs = "Implants";
 					break;
 				case "solo":
 					profile.performances.solo = value.split(",").map((p) => p.trim()).filter(Boolean);
@@ -459,18 +452,18 @@
 			const scoreMatch = (ratingBox.querySelector("strong")?.textContent || "").match(/(\d+\.?\d*)/);
 			if (scoreMatch) profile.rating.score = parseFloat(scoreMatch[1]);
 			const smalls = Array.from(ratingBox.querySelectorAll("small"));
-			const votesMatch = (smalls.find((el) => /vote/i.test(el.textContent || "")) || smalls[smalls.length - 1])?.textContent?.match(/(\d+)/);
+			const votesMatch = (smalls.find((el) => /vote/i.test(el.textContent || "")) || smalls[smalls.length - 1])?.textContent?.replace(/,/g, "").match(/(\d+)/);
 			if (votesMatch) profile.rating.votes = parseInt(votesMatch[1], 10);
 		}
 		const favBox = doc.querySelector(".rating-fav");
 		if (favBox) {
-			const favMatch = (favBox.querySelector("div")?.textContent || "").match(/(\d+)/);
+			const favMatch = (favBox.querySelector("div")?.textContent || "").replace(/,/g, "").match(/(\d+)/);
 			if (favMatch) profile.rating.favorites = parseInt(favMatch[1], 10);
 		}
 		return profile;
 	}
 	function extractPerformerName(thumb, anchor) {
-		const a = anchor || thumb.querySelector("a");
+		const a = anchor || thumb.querySelector("a[href*=\"/babe/\"]") || thumb.querySelector("a");
 		const url = a?.getAttribute("href") || "";
 		let name = "";
 		const textLink = thumb.querySelector(".thumbtext a");
@@ -483,7 +476,7 @@
 				name = colonIdx !== -1 ? rawText.substring(colonIdx + 1).trim() : rawText.trim();
 			} else name = a?.getAttribute("title")?.trim() || url.split("/").pop()?.replace(/_/g, " ") || "";
 		}
-		return name.replace(/^#\d+:\s*/, "").trim();
+		return name.split("\n")[0].replace(/\s*\d+(?:\.\d+)?\/10.*$/, "").replace(/^#\d+:\s*/, "").trim();
 	}
 	var container = null;
 	var bar = null;
@@ -552,7 +545,7 @@
 			badge.textContent = `${profile.personal.age}y`;
 			anchor.appendChild(badge);
 		}
-		if (profile.body.cup) {
+		if (profile.body.cup || profile.body.boobs !== "Unknown") {
 			const badge = document.createElement("div");
 			badge.className = "bp-badge bp-badge-bottom-left";
 			if (profile.body.boobs !== "Unknown") {
@@ -575,8 +568,9 @@
 				svg.appendChild(circle);
 				badge.appendChild(svg);
 			}
+			const text = profile.body.cup || (profile.body.boobs === "Natural" ? "Nat" : "Imp");
 			const span = document.createElement("span");
-			span.textContent = profile.body.cup;
+			span.textContent = text;
 			badge.appendChild(span);
 			anchor.appendChild(badge);
 		}
@@ -918,9 +912,11 @@
 				const maxEl = document.getElementById(maxId);
 				minEl?.addEventListener("input", () => {
 					if (+minEl.value > +maxEl.value) maxEl.value = minEl.value;
+					this.updateLabelBubbles();
 				});
 				maxEl?.addEventListener("input", () => {
 					if (+maxEl.value < +minEl.value) minEl.value = maxEl.value;
+					this.updateLabelBubbles();
 				});
 			});
 			const commitFilters = (debounce = false) => {
@@ -1115,6 +1111,21 @@
 					if (a && !knownPerformances.has(a)) newPerfs.add(a);
 				});
 			});
+			activeFilters.ethnicities.forEach((v) => {
+				if (v && !knownEthnicities.has(v)) newEth.add(v);
+			});
+			activeFilters.hairColors.forEach((v) => {
+				if (v && !knownHairColors.has(v)) newHair.add(v);
+			});
+			activeFilters.eyeColors.forEach((v) => {
+				if (v && !knownEyeColors.has(v)) newEyes.add(v);
+			});
+			activeFilters.cupSizes.forEach((v) => {
+				if (v && !knownCups.has(v)) newCups.add(v);
+			});
+			activeFilters.performances.forEach((v) => {
+				if (v && !knownPerformances.has(v)) newPerfs.add(v);
+			});
 			this.appendTags("bp-ethnicities-container", newEth, knownEthnicities, activeFilters.ethnicities);
 			this.appendTags("bp-hair-container", newHair, knownHairColors, activeFilters.hairColors);
 			this.appendTags("bp-eyes-container", newEyes, knownEyeColors, activeFilters.eyeColors);
@@ -1168,33 +1179,28 @@
 			this._lastProfiles = cachedProfiles;
 			const filters = Cache.getFilterSettings();
 			const badgeSettings = Cache.getBadgeSettings();
-			const thumbsContainer = document.getElementById("thumbs");
-			if (thumbsContainer) {
-				const hideAll = !badgeSettings.showAge && !badgeSettings.showCupBoobs && !badgeSettings.showCountry;
-				thumbsContainer.classList.toggle("bp-hide-badges", hideAll);
-				thumbsContainer.classList.toggle("bp-hide-age", !badgeSettings.showAge);
-				thumbsContainer.classList.toggle("bp-hide-cup-boobs", !badgeSettings.showCupBoobs);
-				thumbsContainer.classList.toggle("bp-hide-country", !badgeSettings.showCountry);
-			}
+			const hideAll = !badgeSettings.showAge && !badgeSettings.showCupBoobs && !badgeSettings.showCountry;
+			document.body.classList.toggle("bp-hide-badges", hideAll);
+			document.body.classList.toggle("bp-hide-age", !badgeSettings.showAge);
+			document.body.classList.toggle("bp-hide-cup-boobs", !badgeSettings.showCupBoobs);
+			document.body.classList.toggle("bp-hide-country", !badgeSettings.showCountry);
 			const thumbshots = document.querySelectorAll(".thumbshot");
 			let matchCount = 0;
 			let totalCount = 0;
 			const activeFilterCount = this.getActiveFiltersCount(filters);
-			const nonSearchFilterActive = activeFilterCount - (filters.searchQuery ? 1 : 0) > 0;
 			const inRange = (val, min, max, active) => !active || val !== null && val >= min && val <= max;
 			thumbshots.forEach((thumb) => {
 				const el = thumb;
-				const anchor = el.querySelector("a");
+				if (el.closest("aside, .sidebar") || el.classList.contains("menuthumb") || el.classList.contains("thumbshotsmall")) return;
+				const anchor = el.querySelector("a[href*=\"/babe/\"]") || el.querySelector("a");
 				if (!anchor) return;
-				const url = anchor.getAttribute("href");
-				if (!url) return;
+				const rawUrl = anchor.getAttribute("href");
+				if (!rawUrl) return;
+				const slug = el.getAttribute("data-bp-slug") || cleanUrl(rawUrl);
+				if (!slug) return;
 				totalCount++;
-				const profile = cachedProfiles.get(url);
+				const profile = cachedProfiles.get(slug);
 				if (!profile) {
-					if (nonSearchFilterActive) {
-						el.style.display = "none";
-						return;
-					}
 					el.style.opacity = "0.5";
 					if (filters.searchQuery) {
 						const cleanName = el.getAttribute("data-bp-name") || extractPerformerName(el, anchor);
@@ -1206,7 +1212,7 @@
 				el.style.opacity = "";
 				Badges.render(el, profile);
 				const q = filters.searchQuery.toLowerCase();
-				const isPornstar = profile.personal.professions.some((p) => p.includes("porn star") || p.includes("pornstar"));
+				const isPornstar = profile.personal.professions.some((p) => /porn|adult\s*(film|movie|actress|star)/i.test(p));
 				const allActs = [
 					...profile.performances.solo,
 					...profile.performances.girlGirl,
@@ -1256,12 +1262,13 @@
 	var isScraping = false;
 	var totalToScrape = 0;
 	var scrapedCount = 0;
-	var CONCURRENCY = 4;
+	var CONCURRENCY = 3;
 	var activeCount = 0;
-	var DISPATCH_GAP_MS = 60;
+	var DISPATCH_GAP_MS = 150;
 	var nextDispatchAt = 0;
 	var consecutiveFailures = 0;
 	var cooldownUntil = 0;
+	var cooldownTimer = null;
 	var MAX_RETRIES = 3;
 	var itemRetries = new Map();
 	function coalesce(run) {
@@ -1281,41 +1288,55 @@
 		FilterPanel.populateDynamicTags(pageProfiles);
 		scheduleFilterApply();
 	});
+	function isSidebarThumb(thumb) {
+		return !!thumb.closest("aside, .sidebar, .menuthumb") || thumb.classList.contains("menuthumb") || thumb.classList.contains("thumbshotsmall");
+	}
+	function findBabeAnchor(thumb) {
+		return thumb.querySelector("a[href*=\"/babe/\"]") || thumb.querySelector("a");
+	}
 	function main() {
 		Cache.initDbCache();
-		const thumbsContainer = document.getElementById("thumbs");
-		if (!thumbsContainer) return;
+		if (/^\/babe\/[^/]+$/i.test(window.location.pathname)) return;
+		const thumbs = Array.from(document.querySelectorAll(".thumbshot")).filter((t) => !isSidebarThumb(t));
+		if (thumbs.length === 0) {
+			setupAutoPagerObserver();
+			return;
+		}
 		FilterPanel.init(() => {
 			FilterPanel.applyFiltersToPage(pageProfiles);
 		});
 		ProgressBar.init();
-		thumbsContainer.querySelectorAll(".thumbshot").forEach((thumb) => {
+		thumbs.forEach((thumb) => {
 			processThumbshot(thumb);
 		});
 		startQueueProcessor();
 		FilterPanel.populateDynamicTags(pageProfiles);
 		FilterPanel.applyFiltersToPage(pageProfiles);
-		setupAutoPagerObserver(thumbsContainer);
+		setupAutoPagerObserver();
 		window.addEventListener("pagehide", () => {
 			Cache.flushFilterSettings();
 		});
 	}
 	function processThumbshot(thumb) {
-		const anchor = thumb.querySelector("a");
+		if (isSidebarThumb(thumb)) return;
+		const anchor = findBabeAnchor(thumb);
 		if (!anchor) return;
-		const url = anchor.getAttribute("href");
-		if (!url) return;
+		const rawUrl = anchor.getAttribute("href");
+		if (!rawUrl) return;
+		const slug = cleanUrl(rawUrl);
+		if (!slug || !rawUrl.includes("/babe/") && !/^[a-zA-Z0-9_.-]+$/.test(rawUrl)) return;
 		const name = extractPerformerName(thumb, anchor);
 		thumb.setAttribute("data-bp-name", name);
-		const cached = Cache.getProfile(url);
-		if (cached) pageProfiles.set(url, cached);
-		else enqueueThumb(url, name);
+		thumb.setAttribute("data-bp-slug", slug);
+		const cached = Cache.getProfile(slug);
+		if (cached) pageProfiles.set(slug, cached);
+		else enqueueThumb(slug, name);
 	}
-	function enqueueThumb(url, name) {
-		if (queuedUrls.has(url)) return;
-		queuedUrls.add(url);
+	function enqueueThumb(slug, name) {
+		if (queuedUrls.has(slug)) return;
+		queuedUrls.add(slug);
 		scrapeQueue.push({
-			url,
+			url: slug,
 			name
 		});
 		totalToScrape++;
@@ -1331,23 +1352,25 @@
 	function handleRetryable(item, errorMsg) {
 		consecutiveFailures++;
 		console.warn(errorMsg);
-		cooldownUntil = Date.now() + Math.min(1e4, consecutiveFailures * 3e3);
-		const retries = itemRetries.get(item.url) || 0;
+		cooldownUntil = Date.now() + Math.min(1e4, consecutiveFailures * 2e3);
+		const slug = cleanUrl(item.url);
+		const retries = itemRetries.get(slug) || 0;
 		if (retries < MAX_RETRIES) {
-			itemRetries.set(item.url, retries + 1);
+			itemRetries.set(slug, retries + 1);
 			scrapeQueue.push(item);
 		} else {
 			console.error(`[BP] Max retries reached for ${item.name}. Skipping.`);
-			itemRetries.delete(item.url);
-			queuedUrls.delete(item.url);
+			itemRetries.delete(slug);
+			queuedUrls.delete(slug);
 			scrapedCount++;
 			ProgressBar.update(scrapedCount, totalToScrape);
 		}
 	}
 	function handleTerminal(item, errorMsg) {
 		console.warn(errorMsg);
-		queuedUrls.delete(item.url);
-		itemRetries.delete(item.url);
+		const slug = cleanUrl(item.url);
+		queuedUrls.delete(slug);
+		itemRetries.delete(slug);
 		scrapedCount++;
 		ProgressBar.update(scrapedCount, totalToScrape);
 	}
@@ -1355,7 +1378,8 @@
 		if (!isScraping) return;
 		const now = Date.now();
 		if (now < cooldownUntil) {
-			setTimeout(() => {
+			if (!cooldownTimer) cooldownTimer = setTimeout(() => {
+				cooldownTimer = null;
 				if (isScraping) pumpQueue();
 			}, cooldownUntil - now);
 			return;
@@ -1363,10 +1387,11 @@
 		while (activeCount < CONCURRENCY && scrapeQueue.length > 0) {
 			const item = scrapeQueue.shift();
 			if (!item) break;
-			const cached = Cache.getProfile(item.url);
+			const slug = cleanUrl(item.url);
+			const cached = Cache.getProfile(slug);
 			if (cached) {
-				queuedUrls.delete(item.url);
-				pageProfiles.set(item.url, cached);
+				queuedUrls.delete(slug);
+				pageProfiles.set(slug, cached);
 				scrapedCount++;
 				ProgressBar.update(scrapedCount, totalToScrape);
 				scheduleFilterApply();
@@ -1391,42 +1416,63 @@
 			scheduleTagRefresh();
 		}
 	}
+	function requestProfile(targetUrl) {
+		if (typeof _GM_xmlhttpRequest === "function") return new Promise((resolve, reject) => {
+			_GM_xmlhttpRequest({
+				method: "GET",
+				url: targetUrl,
+				timeout: 3e4,
+				headers: {
+					"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+					"Accept-Language": navigator.language || "en-US,en;q=0.9",
+					"Cache-Control": "no-cache"
+				},
+				onload: (res) => resolve({
+					status: res.status,
+					responseText: res.responseText
+				}),
+				onerror: (err) => reject(new Error(String(err))),
+				ontimeout: () => reject(new Error("Timeout after 30s"))
+			});
+		});
+		return fetch(targetUrl, {
+			credentials: "same-origin",
+			headers: { "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+		}).then(async (res) => ({
+			status: res.status,
+			responseText: await res.text()
+		}));
+	}
 	function dispatchItem(item) {
-		_GM_xmlhttpRequest({
-			method: "GET",
-			url: item.url.startsWith("http") ? item.url : window.location.origin + item.url,
-			timeout: 3e4,
-			onload: (response) => {
-				activeCount--;
-				if (response.status === 200) {
-					consecutiveFailures = 0;
-					cooldownUntil = 0;
-					try {
-						const profile = parseProfileHtml(response.responseText, item.url, item.name);
-						Cache.setProfile(item.url, profile);
-						pageProfiles.set(item.url, profile);
-						scheduleTagRefresh();
-					} catch (e) {
-						console.error(`[BP] Parse error for ${item.name}:`, e);
-					}
-					itemRetries.delete(item.url);
-					queuedUrls.delete(item.url);
-					scrapedCount++;
-					ProgressBar.update(scrapedCount, totalToScrape);
-				} else if (response.status === 429 || response.status === 503 || response.status === 403) handleRetryable(item, `[BP] Rate limited or blocked (${response.status}) for ${item.name}.`);
-				else handleTerminal(item, `[BP] Fetch failed for ${item.name}: ${response.status}`);
-				pumpQueue();
-			},
-			onerror: (err) => onRequestFailed(item, `[BP] Network error for ${item.name}: ${err}`),
-			ontimeout: () => onRequestFailed(item, `[BP] Timeout after 30s for ${item.name}.`)
+		const slug = cleanUrl(item.url);
+		requestProfile(`https://www.babepedia.com/babe/${slug}`).then(({ status, responseText }) => {
+			activeCount--;
+			if (status === 200) try {
+				const profile = parseProfileHtml(responseText, `/babe/${slug}`, item.name);
+				Cache.setProfile(slug, profile);
+				pageProfiles.set(slug, profile);
+				consecutiveFailures = 0;
+				cooldownUntil = 0;
+				itemRetries.delete(slug);
+				queuedUrls.delete(slug);
+				scrapedCount++;
+				ProgressBar.update(scrapedCount, totalToScrape);
+				scheduleTagRefresh();
+			} catch (e) {
+				handleRetryable(item, `[BP] Parse error / verification failed for ${item.name}: ${e}`);
+			}
+			else if (status === 429 || status === 503 || status === 403) handleRetryable(item, `[BP] Rate limited or blocked (${status}) for ${item.name}.`);
+			else handleTerminal(item, `[BP] Fetch failed for ${item.name}: ${status}`);
+			pumpQueue();
+		}).catch((err) => {
+			activeCount--;
+			handleRetryable(item, `[BP] Request failed for ${item.name}: ${err}`);
+			pumpQueue();
 		});
 	}
-	function onRequestFailed(item, errorMsg) {
-		activeCount--;
-		handleRetryable(item, errorMsg);
-		pumpQueue();
-	}
-	function setupAutoPagerObserver(thumbsContainer) {
+	function setupAutoPagerObserver() {
+		const target = document.getElementById("content") || document.body;
+		if (!target) return;
 		new MutationObserver((mutations) => {
 			let added = false;
 			for (const mutation of mutations) for (const node of Array.from(mutation.addedNodes)) {
@@ -1451,9 +1497,9 @@
 					pumpQueue();
 				}
 			}
-		}).observe(thumbsContainer, {
+		}).observe(target, {
 			childList: true,
-			subtree: false
+			subtree: true
 		});
 	}
 	main();

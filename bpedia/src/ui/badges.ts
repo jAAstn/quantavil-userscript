@@ -17,8 +17,8 @@ export const Badges = {
       anchor.appendChild(badge);
     }
 
-    // Bottom-Left: Combined Cup & Boobs (dot + cup letter)
-    if (profile.body.cup) {
+    // Bottom-Left: Combined Cup & Boobs (dot + cup letter or status)
+    if (profile.body.cup || profile.body.boobs !== 'Unknown') {
       const badge = document.createElement('div');
       badge.className = 'bp-badge bp-badge-bottom-left';
 
@@ -45,8 +45,9 @@ export const Badges = {
         badge.appendChild(svg);
       }
 
+      const text = profile.body.cup || (profile.body.boobs === 'Natural' ? 'Nat' : 'Imp');
       const span = document.createElement('span');
-      span.textContent = profile.body.cup;
+      span.textContent = text;
       badge.appendChild(span);
 
       anchor.appendChild(badge);

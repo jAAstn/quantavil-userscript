@@ -71,16 +71,20 @@ body.lightsoff {
   left: 4px;
 }
 
-/* Badge visibility toggles via parent container classes */
+/* Badge visibility toggles via body or container classes */
+body.bp-hide-badges .bp-badge,
 #thumbs.bp-hide-badges .bp-badge {
   display: none !important;
 }
+body.bp-hide-age .bp-badge-top-left,
 #thumbs.bp-hide-age .bp-badge-top-left {
   display: none !important;
 }
+body.bp-hide-cup-boobs .bp-badge-bottom-left,
 #thumbs.bp-hide-cup-boobs .bp-badge-bottom-left {
   display: none !important;
 }
+body.bp-hide-country .bp-badge-bottom-right,
 #thumbs.bp-hide-country .bp-badge-bottom-right {
   display: none !important;
 }

@@ -1,12 +1,12 @@
 import { GM_xmlhttpRequest } from '$';
 import './style.css';
 import { PerformerProfile } from './types';
-import { Cache } from './cache';
+import { Cache, cleanUrl } from './cache';
 import { parseProfileHtml, extractPerformerName } from './parser';
 import { ProgressBar } from './ui/progress';
 import { FilterPanel } from './ui/filterPanel';
 
-// In-memory profile store for the current page view
+// In-memory profile store for the current page view, keyed by clean performer slug
 const pageProfiles = new Map<string, PerformerProfile>();
 
 // Scraper queue
@@ -16,18 +16,17 @@ interface QueueItem {
 }
 
 const scrapeQueue: QueueItem[] = [];
-const queuedUrls = new Set<string>(); // O(1) dedup instead of O(n) .some()
+const queuedUrls = new Set<string>(); // O(1) dedup using clean slug
 let isScraping = false;
-// Append-only counters for a page view: the "done/total" display
-// only moves forward and the total never shrinks on refresh.
 let totalToScrape = 0;
 let scrapedCount = 0;
-const CONCURRENCY = 4;
+const CONCURRENCY = 3;
 let activeCount = 0;
-const DISPATCH_GAP_MS = 60;
+const DISPATCH_GAP_MS = 150;
 let nextDispatchAt = 0;
 let consecutiveFailures = 0;
 let cooldownUntil = 0;
+let cooldownTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_RETRIES = 3;
 const itemRetries = new Map<string, number>();
 
@@ -52,10 +51,36 @@ const scheduleTagRefresh = coalesce(() => {
   scheduleFilterApply();
 });
 
+function isSidebarThumb(thumb: HTMLElement): boolean {
+  return (
+    !!thumb.closest('aside, .sidebar, .menuthumb') ||
+    thumb.classList.contains('menuthumb') ||
+    thumb.classList.contains('thumbshotsmall')
+  );
+}
+
+function findBabeAnchor(thumb: HTMLElement): HTMLAnchorElement | null {
+  return (
+    thumb.querySelector<HTMLAnchorElement>('a[href*="/babe/"]') ||
+    thumb.querySelector<HTMLAnchorElement>('a')
+  );
+}
+
 function main() {
   Cache.initDbCache();
-  const thumbsContainer = document.getElementById('thumbs');
-  if (!thumbsContainer) return;
+
+  // If viewing an individual performer profile page, don't run list filtering
+  if (/^\/babe\/[^/]+$/i.test(window.location.pathname)) return;
+
+  const thumbs = Array.from(document.querySelectorAll<HTMLElement>('.thumbshot')).filter(
+    (t) => !isSidebarThumb(t)
+  );
+
+  // If no thumbnails yet, set up observer and wait for potential dynamic loads
+  if (thumbs.length === 0) {
+    setupAutoPagerObserver();
+    return;
+  }
 
   // Init UI
   FilterPanel.init(() => {
@@ -64,38 +89,47 @@ function main() {
   ProgressBar.init();
 
   // Process initial thumbnails
-  thumbsContainer.querySelectorAll('.thumbshot').forEach((thumb) => {
-    processThumbshot(thumb as HTMLElement);
+  thumbs.forEach((thumb) => {
+    processThumbshot(thumb);
   });
 
   startQueueProcessor();
 
-  // Initial tag + filter pass (single pass, not double)
+  // Initial tag + filter pass
   FilterPanel.populateDynamicTags(pageProfiles);
   FilterPanel.applyFiltersToPage(pageProfiles);
 
-  setupAutoPagerObserver(thumbsContainer);
+  setupAutoPagerObserver();
+
   window.addEventListener('pagehide', () => {
     Cache.flushFilterSettings();
   });
 }
 
 function processThumbshot(thumb: HTMLElement): void {
-  const anchor = thumb.querySelector('a');
+  if (isSidebarThumb(thumb)) return;
+
+  const anchor = findBabeAnchor(thumb);
   if (!anchor) return;
 
-  const url = anchor.getAttribute('href');
-  if (!url) return;
+  const rawUrl = anchor.getAttribute('href');
+  if (!rawUrl) return;
+
+  const slug = cleanUrl(rawUrl);
+  if (!slug || (!rawUrl.includes('/babe/') && !/^[a-zA-Z0-9_.-]+$/.test(rawUrl))) {
+    return;
+  }
 
   const name = extractPerformerName(thumb, anchor);
   thumb.setAttribute('data-bp-name', name);
+  thumb.setAttribute('data-bp-slug', slug);
 
-  // Check cache first
-  const cached = Cache.getProfile(url);
+  // Check cache first (normalized by clean slug)
+  const cached = Cache.getProfile(slug);
   if (cached) {
-    pageProfiles.set(url, cached);
+    pageProfiles.set(slug, cached);
   } else {
-    enqueueThumb(url, name);
+    enqueueThumb(slug, name);
   }
 }
 
@@ -103,10 +137,10 @@ function processThumbshot(thumb: HTMLElement): void {
  * Queue a profile for scraping. The total only ever grows here —
  * retries reuse their original slot — so "done/total" never shrinks.
  */
-function enqueueThumb(url: string, name: string): void {
-  if (queuedUrls.has(url)) return;
-  queuedUrls.add(url);
-  scrapeQueue.push({ url, name });
+function enqueueThumb(slug: string, name: string): void {
+  if (queuedUrls.has(slug)) return;
+  queuedUrls.add(slug);
+  scrapeQueue.push({ url: slug, name });
   totalToScrape++;
   if (isScraping) ProgressBar.update(scrapedCount, totalToScrape);
 }
@@ -115,25 +149,25 @@ function startQueueProcessor(): void {
   if (isScraping || scrapeQueue.length === 0) return;
 
   isScraping = true;
-
   ProgressBar.show();
   ProgressBar.update(scrapedCount, totalToScrape);
   pumpQueue();
 }
 
-/** Requeue (keeping the original total slot) with backoff, or give up after MAX_RETRIES. */
+/** Requeue with backoff or give up after MAX_RETRIES. */
 function handleRetryable(item: QueueItem, errorMsg: string): void {
   consecutiveFailures++;
   console.warn(errorMsg);
-  cooldownUntil = Date.now() + Math.min(10000, consecutiveFailures * 3000);
-  const retries = itemRetries.get(item.url) || 0;
+  cooldownUntil = Date.now() + Math.min(10000, consecutiveFailures * 2000);
+  const slug = cleanUrl(item.url);
+  const retries = itemRetries.get(slug) || 0;
   if (retries < MAX_RETRIES) {
-    itemRetries.set(item.url, retries + 1);
+    itemRetries.set(slug, retries + 1);
     scrapeQueue.push(item);
   } else {
     console.error(`[BP] Max retries reached for ${item.name}. Skipping.`);
-    itemRetries.delete(item.url);
-    queuedUrls.delete(item.url);
+    itemRetries.delete(slug);
+    queuedUrls.delete(slug);
     scrapedCount++;
     ProgressBar.update(scrapedCount, totalToScrape);
   }
@@ -142,25 +176,24 @@ function handleRetryable(item: QueueItem, errorMsg: string): void {
 /** Permanent failure: count it done so the counter keeps moving forward. */
 function handleTerminal(item: QueueItem, errorMsg: string): void {
   console.warn(errorMsg);
-  queuedUrls.delete(item.url);
-  itemRetries.delete(item.url);
+  const slug = cleanUrl(item.url);
+  queuedUrls.delete(slug);
+  itemRetries.delete(slug);
   scrapedCount++;
   ProgressBar.update(scrapedCount, totalToScrape);
 }
 
-/**
- * Parallel queue pump: keeps up to CONCURRENCY requests in flight with
- * dispatch starts spaced by DISPATCH_GAP_MS. A 429/503/403 (or network
- * error) parks the pump in a cooldown instead of hammering the site.
- */
 function pumpQueue(): void {
   if (!isScraping) return;
 
   const now = Date.now();
   if (now < cooldownUntil) {
-    setTimeout(() => {
-      if (isScraping) pumpQueue();
-    }, cooldownUntil - now);
+    if (!cooldownTimer) {
+      cooldownTimer = setTimeout(() => {
+        cooldownTimer = null;
+        if (isScraping) pumpQueue();
+      }, cooldownUntil - now);
+    }
     return;
   }
 
@@ -168,14 +201,15 @@ function pumpQueue(): void {
     const item = scrapeQueue.shift();
     if (!item) break;
 
+    const slug = cleanUrl(item.url);
+
     // Double-check cache: may have been stored while queued
-    const cached = Cache.getProfile(item.url);
+    const cached = Cache.getProfile(slug);
     if (cached) {
-      queuedUrls.delete(item.url);
-      pageProfiles.set(item.url, cached);
+      queuedUrls.delete(slug);
+      pageProfiles.set(slug, cached);
       scrapedCount++;
       ProgressBar.update(scrapedCount, totalToScrape);
-      // Don't apply filters per-item during bulk scrape — coalesce
       scheduleFilterApply();
       continue;
     }
@@ -187,7 +221,6 @@ function pumpQueue(): void {
       try {
         dispatchItem(item);
       } catch (e) {
-        // Synchronous dispatch failure: reclaim the slot, retry via normal path
         activeCount--;
         handleRetryable(item, `[BP] Dispatch failed for ${item.name}: ${e}`);
         pumpQueue();
@@ -198,57 +231,83 @@ function pumpQueue(): void {
   if (scrapeQueue.length === 0 && activeCount === 0) {
     isScraping = false;
     ProgressBar.hide();
-    // Final refresh after all scraping completes
     scheduleTagRefresh();
   }
 }
 
+function requestProfile(targetUrl: string): Promise<{ status: number; responseText: string }> {
+  if (typeof GM_xmlhttpRequest === 'function') {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: 'GET',
+        url: targetUrl,
+        timeout: 30000,
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': navigator.language || 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache'
+        },
+        onload: (res: any) => resolve({ status: res.status, responseText: res.responseText }),
+        onerror: (err: any) => reject(new Error(String(err))),
+        ontimeout: () => reject(new Error('Timeout after 30s'))
+      });
+    });
+  }
+
+  // Fallback to native fetch for same-origin requests
+  return fetch(targetUrl, {
+    credentials: 'same-origin',
+    headers: {
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    }
+  }).then(async (res) => ({
+    status: res.status,
+    responseText: await res.text()
+  }));
+}
+
 function dispatchItem(item: QueueItem): void {
-  const targetUrl = item.url.startsWith('http') ? item.url : window.location.origin + item.url;
+  const slug = cleanUrl(item.url);
+  const targetUrl = `https://www.babepedia.com/babe/${slug}`;
 
-  GM_xmlhttpRequest({
-    method: 'GET',
-    url: targetUrl,
-    timeout: 30000,
-    onload: (response: any) => {
+  requestProfile(targetUrl)
+    .then(({ status, responseText }) => {
       activeCount--;
-      if (response.status === 200) {
-        consecutiveFailures = 0;
-        cooldownUntil = 0;
+      if (status === 200) {
         try {
-          const profile = parseProfileHtml(response.responseText, item.url, item.name);
-          Cache.setProfile(item.url, profile);
-          pageProfiles.set(item.url, profile);
+          const profile = parseProfileHtml(responseText, `/babe/${slug}`, item.name);
+          Cache.setProfile(slug, profile);
+          pageProfiles.set(slug, profile);
 
-          // Coalesced: schedule a single tag+filter refresh per frame
+          consecutiveFailures = 0;
+          cooldownUntil = 0;
+          itemRetries.delete(slug);
+          queuedUrls.delete(slug);
+          scrapedCount++;
+          ProgressBar.update(scrapedCount, totalToScrape);
+
           scheduleTagRefresh();
         } catch (e) {
-          console.error(`[BP] Parse error for ${item.name}:`, e);
+          handleRetryable(item, `[BP] Parse error / verification failed for ${item.name}: ${e}`);
         }
-        itemRetries.delete(item.url);
-        queuedUrls.delete(item.url);
-        scrapedCount++;
-        ProgressBar.update(scrapedCount, totalToScrape);
-      } else if (response.status === 429 || response.status === 503 || response.status === 403) {
-        handleRetryable(item, `[BP] Rate limited or blocked (${response.status}) for ${item.name}.`);
+      } else if (status === 429 || status === 503 || status === 403) {
+        handleRetryable(item, `[BP] Rate limited or blocked (${status}) for ${item.name}.`);
       } else {
-        handleTerminal(item, `[BP] Fetch failed for ${item.name}: ${response.status}`);
+        handleTerminal(item, `[BP] Fetch failed for ${item.name}: ${status}`);
       }
       pumpQueue();
-    },
-    onerror: (err: any) => onRequestFailed(item, `[BP] Network error for ${item.name}: ${err}`),
-    ontimeout: () => onRequestFailed(item, `[BP] Timeout after 30s for ${item.name}.`)
-  });
+    })
+    .catch((err) => {
+      activeCount--;
+      handleRetryable(item, `[BP] Request failed for ${item.name}: ${err}`);
+      pumpQueue();
+    });
 }
 
-/** Shared failure path for onerror/ontimeout: reclaim slot, back off, re-pump. */
-function onRequestFailed(item: QueueItem, errorMsg: string): void {
-  activeCount--;
-  handleRetryable(item, errorMsg);
-  pumpQueue();
-}
+function setupAutoPagerObserver(): void {
+  const target = document.getElementById('content') || document.body;
+  if (!target) return;
 
-function setupAutoPagerObserver(thumbsContainer: HTMLElement): void {
   const observer = new MutationObserver((mutations) => {
     let added = false;
 
@@ -261,8 +320,8 @@ function setupAutoPagerObserver(thumbsContainer: HTMLElement): void {
           processThumbshot(el);
           added = true;
         } else {
-          el.querySelectorAll('.thumbshot').forEach((inner) => {
-            processThumbshot(inner as HTMLElement);
+          el.querySelectorAll<HTMLElement>('.thumbshot').forEach((inner) => {
+            processThumbshot(inner);
             added = true;
           });
         }
@@ -270,10 +329,8 @@ function setupAutoPagerObserver(thumbsContainer: HTMLElement): void {
     }
 
     if (added) {
-      // Immediately show badges for cached profiles
       scheduleFilterApply();
 
-      // Resume the pump if new work arrived; totals only grow via enqueueThumb
       if (scrapeQueue.length > 0) {
         if (!isScraping) {
           isScraping = true;
@@ -285,7 +342,7 @@ function setupAutoPagerObserver(thumbsContainer: HTMLElement): void {
     }
   });
 
-  observer.observe(thumbsContainer, { childList: true, subtree: false });
+  observer.observe(target, { childList: true, subtree: true });
 }
 
 main();
