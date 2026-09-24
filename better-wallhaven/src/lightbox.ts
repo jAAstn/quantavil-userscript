@@ -113,7 +113,7 @@ export class LightboxManager {
       this.currentData = cached;
       this.els.loading.textContent = '';
       this.els.img.src = cached.url;
-      this.els.info.textContent = `${id} · ${cached.sizeString}`;
+      this.els.info.textContent = cached.sizeString ? `${id} · Size: ${cached.sizeString}` : id;
       return;
     }
 
@@ -127,7 +127,7 @@ export class LightboxManager {
       this.currentData = { url: meta.url, sizeString: meta.size };
       this.els.loading.textContent = '';
       this.els.img.src = meta.url;
-      this.els.info.textContent = `${id} · ${meta.size}`;
+      this.els.info.textContent = meta.size ? `${id} · Size: ${meta.size}` : id;
     });
   }
 

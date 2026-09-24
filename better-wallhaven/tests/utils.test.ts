@@ -28,4 +28,12 @@ describe('Utility Helpers', () => {
     const expectedHtml = `<a href="https://wallhaven.cc/user/name">User</a> <img src="https://wallhaven.cc/images/img.jpg"> <a href="https://example.com">External</a>`;
     expect(makeAbsolute(inputHtml)).toBe(expectedHtml);
   });
+
+  it('should extract clean file names and ignore query params / fragments', async () => {
+    const { fileNameOf } = await import('../src/download');
+    expect(fileNameOf('https://w.wallhaven.cc/full/je/wallhaven-jel1jq.jpg', 'fallback.jpg')).toBe('wallhaven-jel1jq.jpg');
+    expect(fileNameOf('https://w.wallhaven.cc/full/je/wallhaven-jel1jq.jpg?token=abc&v=1', 'fallback.jpg')).toBe('wallhaven-jel1jq.jpg');
+    expect(fileNameOf('https://w.wallhaven.cc/full/je/wallhaven-jel1jq.png#preview', 'fallback.jpg')).toBe('wallhaven-jel1jq.png');
+    expect(fileNameOf('', 'fallback.jpg')).toBe('fallback.jpg');
+  });
 });

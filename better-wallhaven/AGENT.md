@@ -39,13 +39,10 @@ A userscript (Better Wallhaven v1.0.0) for wallhaven.cc listing grids: adjustabl
 ## Insights
 - Per-thumb overlays use free DOM data only; old parallel HEAD lookups caused rate-limits. All full info is opt-in per click (4KB API, cached).
 - Grid size via CSS `--wh-cell` override beats inline `300x200` without layout thrash; persist `whGridSize`.
-- Audit fixes: sidebar restores full session props/tags on revisit (was free-fields only); failed API/HD attempts are evicted from session cache so retry refetches; lightbox previews the larger `lg` thumb; `fmtSize` deduped into `fmtSz`; fav sync also matches `.wall-favs`.
-- Native stacking: wallhaven's `a.preview` sits at z-index 110 over the whole thumb; overlay-era layers had to clear it (verified with Playwright hit-testing). Current below-strip buttons sit outside the figure, unaffected.
-- Native `.thumb-info` hover bar clips mid-transition (sliced star); hidden since the strip duplicates res/favs/type — favorite kept via proxied native clicks + state mirror.
-- HD block uses CSS grid (never float `dt`/`dd`), tabular numerals, tag-margin reset against native `.tag` styles.
-- No repeated data: chips row owns res/favs/type; the HD block headlines file size only and omits Resolution/Favorites/Type rows.
-- Stale persistent entries (size without props) render size instantly on expand, then upgrade via background API refetch.
-- Not fixed (false positives): `as any` in test DOM stubs, `makeAbsolute` (fallback + tested), `GRID_KEY` export (public API), legacy `size` branch in cache (real old installs).
+- Discrete color palette without legend UI: Category dots are Orange (Anime: `#f60`), Violet (General: `#b07bff`), Blue (People: `#4aa3ff`); Purity dots are Green (SFW: `#6c6`), Yellow (Sketchy: `#fc3`), Red (NSFW: `#f36`). Disjoint hues ensure no overlap with purity traffic lights. Hover tooltips (`title` / `aria-label`) act as the sole labels, keeping UI clean on mobile and desktop.
+- Root cause of "mystery blue dot": Substring matching via `cls.includes('thumb-people')` collided with wallpaper IDs such as `thumb-people99` or `thumb-sketchy...`. Fixed with exact class matching (`classList.contains` and space-padded fallback) plus parent fallback.
+- Audit fixes (v1.1.0): clean query strings and hash fragments in `fileNameOf`, fallback safety in `dlFile`, multiple-delay sync for proxied favorite clicks.
+- Not fixed (false positives): "Category and purity swapped in extract.ts" was an AI hallucination; the mappings were always separate, the true bug was ID substring matching. `as any` in test DOM stubs, `makeAbsolute` fallback, `GRID_KEY` export, legacy `size` branch in cache.
 
 ## Blunders
 - [2026-07-03] Failed to write MEMORY.md using ArtifactMetadata in write_to_file -> ArtifactMetadata is only valid for files written inside the chat-specific brain artifacts folder -> Omitted ArtifactMetadata for writing files in the workspace.

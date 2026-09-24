@@ -2,13 +2,12 @@ import { GM_download, GM_xmlhttpRequest } from '$';
 
 /** Filename from a URL with fallback — single source for all download call sites. */
 export function fileNameOf(url: string, fallback: string): string {
-  return url.split('/').pop() || fallback;
+  const clean = url.split('?')[0]?.split('#')[0] ?? '';
+  return clean.split('/').pop() || fallback;
 }
 
 export function dlFile(url: string, name: string) {
-  if (typeof GM_download === 'function') {
-    GM_download({ url, name });
-  } else {
+  const fallback = () => {
     GM_xmlhttpRequest({
       method: 'GET',
       url,
@@ -22,8 +21,23 @@ export function dlFile(url: string, name: string) {
         setTimeout(() => {
           URL.revokeObjectURL(a.href);
           a.remove();
-        }, 100);
+        }, 1000);
       }
     });
+  };
+
+  if (typeof GM_download === 'function') {
+    try {
+      GM_download({
+        url,
+        name,
+        onerror: () => fallback(),
+        ontimeout: () => fallback(),
+      });
+    } catch {
+      fallback();
+    }
+  } else {
+    fallback();
   }
 }

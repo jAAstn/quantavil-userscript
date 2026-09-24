@@ -10,7 +10,7 @@ export default defineConfig({
       userscript: {
         name: 'Better Wallhaven',
         namespace: 'https://github.com/quantavil/userscript/',
-        version: '1.0.0',
+        version: '1.1.0',
         description: 'Grid size control, per-thumb data with SVG actions and in-thumbnail detail sheet, zero-fetch browsing, opt-in 4KB API details for wallhaven.cc.',
         match: ['*://wallhaven.cc/*'],
         grant: [

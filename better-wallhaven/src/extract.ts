@@ -9,6 +9,20 @@ export interface ThumbMeta {
   fileType: string;
 }
 
+function hasClass(el: HTMLElement, name: string): boolean {
+  if (el.classList && typeof el.classList.contains === 'function') {
+    return el.classList.contains(name);
+  }
+  const cls = typeof el.className === 'string' ? el.className : '';
+  return (` ${cls} `).indexOf(` ${name} `) !== -1;
+}
+
+function checkClass(thumb: HTMLElement, name: string): boolean {
+  if (hasClass(thumb, name)) return true;
+  if (thumb.parentElement && hasClass(thumb.parentElement, name)) return true;
+  return false;
+}
+
 /** Zero-network parse: everything in this object comes from the already-loaded listing DOM. */
 export function extractThumbMeta(thumb: HTMLElement): ThumbMeta {
   const id = thumb.getAttribute('data-wallpaper-id') || '';
@@ -17,19 +31,18 @@ export function extractThumbMeta(thumb: HTMLElement): ThumbMeta {
   const resEl = thumb.querySelector('.thumb-info .wall-res');
   const favEl = thumb.querySelector('.thumb-info .wall-favs');
 
-  const cls = thumb.className || '';
-  const category = cls.includes('thumb-anime')
+  const category = checkClass(thumb, 'thumb-anime')
     ? 'Anime'
-    : cls.includes('thumb-people')
+    : checkClass(thumb, 'thumb-people')
       ? 'People'
-      : cls.includes('thumb-general')
+      : checkClass(thumb, 'thumb-general')
         ? 'General'
         : '';
-  const purity = cls.includes('thumb-nsfw')
+  const purity = checkClass(thumb, 'thumb-nsfw')
     ? 'NSFW'
-    : cls.includes('thumb-sketchy')
+    : checkClass(thumb, 'thumb-sketchy')
       ? 'Sketchy'
-      : cls.includes('thumb-sfw')
+      : checkClass(thumb, 'thumb-sfw')
         ? 'SFW'
         : '';
 

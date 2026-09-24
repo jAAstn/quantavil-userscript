@@ -20,8 +20,8 @@ export function enhanceThumb(thumb: HTMLElement): void {
       <span class="wh-chip wh-res">${m.res || '—'}</span>
       <span class="wh-chip wh-fav">${I.star}<span>${m.favs}</span></span>
       <span class="wh-chip wh-type">${m.fileType}</span>
-      ${m.category ? `<span class="wh-dot ${catCls}" title="${m.category}"></span>` : ''}
-      ${m.purity ? `<span class="wh-dot ${purCls}" title="${m.purity}"></span>` : ''}
+      ${m.category ? `<span class="wh-dot ${catCls}" data-kind="category" title="Category: ${m.category}" aria-label="Category: ${m.category}"></span>` : ''}
+      ${m.purity ? `<span class="wh-dot ${purCls}" data-kind="purity" title="Purity: ${m.purity}" aria-label="Purity: ${m.purity}"></span>` : ''}
     </div>
     <div class="whb-actions">
       <button class="wh-btn wh-dl" data-act="dl" title="Download full">${I.download}</button>

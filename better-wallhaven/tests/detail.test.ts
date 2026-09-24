@@ -37,6 +37,8 @@ describe('buildDetailHtml (below-thumbnail HD block)', () => {
   it('headlines file size and drops chips-duplicate props', () => {
     const html = buildDetailHtml(free, full, 'ready');
     expect(html).toContain('4.53 MB');
+    expect(html).toContain('Size:');
+    expect(html).toContain('whs-label');
     expect(html).toContain('Uploader');
     expect(html).toContain('Views');
     expect(html).toContain('artwork');

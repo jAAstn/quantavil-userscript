@@ -16,7 +16,7 @@ export function buildDetailHtml(_free: ThumbMeta, meta: FullMeta | null, state: 
 
   // Ready: headline is file size only — res/favs/type already live in the chips row.
   const props = meta.properties.filter(([k]) => !OMIT_PROPS.has(k));
-  const head = `<div class="whs-stats"><span class="whs-size">${meta.size || '—'}</span></div>`;
+  const head = `<div class="whs-stats"><span class="whs-size"><span class="whs-label">Size:</span> ${meta.size || '—'}</span></div>`;
   const propsHtml = props.length > 0
     ? `<dl class="whs-props">${props.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`
     : '';

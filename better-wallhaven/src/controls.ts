@@ -72,7 +72,7 @@ export function createGridBar(initial: number, onChange: (px: number) => void) {
     <span class="whg-icon"></span>
     <input class="whg-range" type="range" min="${GRID_MIN}" max="${GRID_MAX}" step="10" value="${initial}" aria-label="Thumbnail size">
     <span class="whg-val">${initial}px</span>
-    <button class="whg-reset" title="Reset 300px">Reset</button>
+    <button class="whg-reset" type="button" title="Reset 300px">Reset</button>
   `;
   const range = bar.querySelector('.whg-range') as HTMLInputElement;
   const val = bar.querySelector('.whg-val') as HTMLElement;
