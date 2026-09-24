@@ -216,24 +216,7 @@ export function determinePostType(element: HTMLElement, contentHref: string): Po
   const rawType = element.getAttribute('post-type')?.toLowerCase();
   const domain = element.getAttribute('domain')?.toLowerCase() || '';
 
-  // 1. External video hosts (e.g. RedGifs, Streamable, Gfycat) are videos even when marked as post-type="link"
-  const isVideoHost =
-    /(redgifs\.com|streamable\.com|gfycat\.com)/i.test(domain) ||
-    /(redgifs\.com|streamable\.com|gfycat\.com)/i.test(contentHref);
-
-  if (isVideoHost) {
-    return 'video';
-  }
-
-  if (rawType === 'video' || rawType === 'image' || rawType === 'gallery' || rawType === 'link' || rawType === 'text') {
-    return rawType;
-  }
-
-  // Crossposts embed the ORIGINAL post's media. Classify by the embedded media
-  // (not the crosspost permalink, which would misfire as a text post), so
-  // crossposted videos/galleries/images render natively. Unresolvable
-  // crossposts fall back to 'link' (opens the original post) instead of an
-  // empty text card.
+  // 1. Crossposts embed the ORIGINAL post's media. Classify by the embedded media
   if (rawType === 'crosspost') {
     if (
       element.querySelector('shreddit-gallery, gallery-carousel, faceplate-carousel, [data-testid="media-gallery"], shreddit-async-loader[bundlename*="gallery"]') !== null
@@ -242,7 +225,7 @@ export function determinePostType(element: HTMLElement, contentHref: string): Po
     }
     if (
       element.querySelector('shreddit-player-2, video, [data-testid="shreddit-player"]') !== null ||
-      /(\.mp4|\.webm|\.m3u8|v\.redd\.it|redgifs\.com|streamable\.com|youtube\.com|youtu\.be)/i.test(contentHref)
+      /(\.mp4|\.webm|\.m3u8|v\.redd\.it|redgifs\.com|streamable\.com|youtube\.com|youtu\.be|tiktok\.com|vimeo\.com)/i.test(contentHref)
     ) {
       return 'video';
     }
@@ -265,62 +248,76 @@ export function determinePostType(element: HTMLElement, contentHref: string): Po
     return 'link';
   }
 
-  if (
-    element.querySelector('shreddit-gallery, gallery-carousel, faceplate-carousel, [data-testid="media-gallery"], shreddit-async-loader[bundlename*="gallery"]') !== null
-  ) {
-    return 'gallery';
-  }
+  // 2. Video detection (explicit post-type, video element, external video host, or video URL)
+  const isVideoHost =
+    /(redgifs\.com|streamable\.com|gfycat\.com)/i.test(domain) ||
+    /(redgifs\.com|streamable\.com|gfycat\.com)/i.test(contentHref);
 
   const isVideo =
     rawType === 'video' ||
+    isVideoHost ||
     element.querySelector('shreddit-player-2, video, [data-testid="shreddit-player"]') !== null ||
-    /(\.mp4|\.webm|\.m3u8|v\.redd\.it|redgifs\.com|streamable\.com|youtube\.com|youtu\.be)/i.test(contentHref);
+    /(\.mp4|\.webm|\.m3u8|v\.redd\.it|redgifs\.com|streamable\.com|youtube\.com|youtu\.be|tiktok\.com|vimeo\.com)/i.test(contentHref);
 
   if (isVideo) {
     return 'video';
   }
 
-  // Primary image check (EXCLUDE subreddit icons, avatars, and background blur filters)
+  // 3. Gallery detection
+  if (
+    rawType === 'gallery' ||
+    element.querySelector('shreddit-gallery, gallery-carousel, faceplate-carousel, [data-testid="media-gallery"], shreddit-async-loader[bundlename*="gallery"]') !== null
+  ) {
+    return 'gallery';
+  }
+
+  // 4. Link post (explicit post-type="link" whose destination is not a video)
+  if (rawType === 'link') {
+    return 'link';
+  }
+
+  // 5. Image post (explicit post-type="image")
+  if (rawType === 'image') {
+    return 'image';
+  }
+
+  // 6. Text post (explicit post-type or self post)
+  const hasTextBody =
+    element.querySelector('[slot="text-body"], shreddit-post-text-body, .usertext-body, [data-testid="post-content"] .md, [data-click-id="text"]') !== null;
+
+  if (rawType === 'text' || domain.startsWith('self.')) {
+    return 'text';
+  }
+
+  // 7. Fallback DOM image inspection (excluding subreddit icons and blur filters)
   const primaryImgEl = element.querySelector(
     'img#post-image, [data-post-media-primary], shreddit-aspect-ratio:not(:has(video)) img:not(.shreddit-subreddit-icon__icon), [data-testid="post-image"] img, img.preview-img, img.media-lightbox-img:not(.post-background-image-filter), [slot="post-media-container"] img:not(.shreddit-subreddit-icon__icon):not(.post-background-image-filter)'
   );
-
   const isImageHref =
     /(\.jpg|\.jpeg|\.png|\.webp|\.gif|i\.redd\.it|i\.imgur\.com)/i.test(contentHref) ||
     domain === 'i.redd.it' ||
     domain === 'i.imgur.com';
 
-  const isImage = rawType === 'image' || primaryImgEl !== null || isImageHref;
-
-  const hasTextBody =
-    element.querySelector('[slot="text-body"], shreddit-post-text-body, .usertext-body, [data-testid="post-content"] .md, [data-click-id="text"]') !== null;
-
-  // Self posts (e.g. domain="self.OpenAI") or text posts with body text and no primary image
-  if (rawType === 'text' || domain.startsWith('self.') || (!isImage && hasTextBody)) {
-    return 'text';
-  }
-
-  if (isImage) {
+  if (primaryImgEl !== null || isImageHref) {
     return 'image';
-  }
-
-  // Check if contentHref is an external article or web link
-  const isExternalLink =
-    rawType === 'link' ||
-    (contentHref &&
-      /^https?:\/\//i.test(contentHref) &&
-      !/(v\.redd\.it|i\.redd\.it|preview\.redd\.it|i\.imgur\.com|\.mp4|\.webm|\.m3u8|\.jpg|\.jpeg|\.png|\.webp|\.gif)/i.test(contentHref) &&
-      !/\/comments\//i.test(contentHref));
-
-  if (isExternalLink) {
-    return 'link';
   }
 
   if (hasTextBody) {
     return 'text';
   }
 
-  // If internal reddit discussion / no media, it's a text post
+  // 8. External web link fallback
+  const isExternalLink =
+    contentHref &&
+    /^https?:\/\//i.test(contentHref) &&
+    !/(v\.redd\.it|i\.redd\.it|preview\.redd\.it|i\.imgur\.com|\.mp4|\.webm|\.m3u8|\.jpg|\.jpeg|\.png|\.webp|\.gif)/i.test(contentHref) &&
+    !/\/comments\//i.test(contentHref);
+
+  if (isExternalLink) {
+    return 'link';
+  }
+
+  // 9. Internal discussion fallback
   if (!contentHref || /\/comments\//i.test(contentHref) || /reddit\.com/i.test(contentHref)) {
     return 'text';
   }
@@ -332,17 +329,15 @@ export function determinePostType(element: HTMLElement, contentHref: string): Po
  * Upvote and downvote button selector candidates across Reddit desktop and mobile layouts.
  */
 export const UPVOTE_SELECTORS = [
-  'button[data-action-bar-action="upvote"]',
-  'button[upvote]',
   '[data-action-bar-action="upvote"]',
+  'button[upvote]',
   'button[aria-label*="upvote" i]',
   'button[name="upvote"]',
-  '[slot="upvote-button"]',
   '[slot="upvote-button"] button',
+  '[slot="upvote-button"]',
   'button[data-click-id="upvote"]',
   'button[id*="upvote" i]',
   'faceplate-tracker[action="upvote"] button',
-  'faceplate-tracker[source="post"][action="upvote"] button',
   'shreddit-post-action-row button[aria-label*="upvote" i]',
   '[data-testid="upvote-button"]',
   '.arrow.up',
@@ -350,17 +345,15 @@ export const UPVOTE_SELECTORS = [
 ];
 
 export const DOWNVOTE_SELECTORS = [
-  'button[data-action-bar-action="downvote"]',
-  'button[downvote]',
   '[data-action-bar-action="downvote"]',
+  'button[downvote]',
   'button[aria-label*="downvote" i]',
   'button[name="downvote"]',
-  '[slot="downvote-button"]',
   '[slot="downvote-button"] button',
+  '[slot="downvote-button"]',
   'button[data-click-id="downvote"]',
   'button[id*="downvote" i]',
   'faceplate-tracker[action="downvote"] button',
-  'faceplate-tracker[source="post"][action="downvote"] button',
   'shreddit-post-action-row button[aria-label*="downvote" i]',
   '[data-testid="downvote-button"]',
   '.arrow.down',
@@ -369,28 +362,75 @@ export const DOWNVOTE_SELECTORS = [
 
 /**
  * Helper to query selectors including inside open shadow roots.
+ * Recursively pierces nested shadowRoots (post -> vote-control -> button)
+ * and prefers real <button> hits over wrapper containers.
  */
 export function queryDeep(root: HTMLElement, selectors: string[]): HTMLElement | null {
-  for (const selector of selectors) {
-    const found = root.querySelector<HTMLElement>(selector);
-    if (found) return found;
-  }
+  const isHidden = (el: HTMLElement): boolean => {
+    try {
+      if (el.hidden) return true;
+      const style = el.getAttribute('style') || '';
+      if (/display\s*:\s*none/i.test(style)) return true;
+      if (el.classList?.contains('rr-native-suppressed')) return true;
+    } catch {}
+    return false;
+  };
 
+  const collect = (node: Node, out: HTMLElement[]): void => {
+    if (!node) return;
+    const HTMLElementCtor = (globalThis as any).HTMLElement;
+    const isElement = HTMLElementCtor ? node instanceof HTMLElementCtor : (node as any)?.nodeType === 1;
+    if (isElement) {
+      const el = node as HTMLElement;
+      for (const selector of selectors) {
+        try {
+          if (el.matches?.(selector)) out.push(el);
+        } catch {}
+      }
+      const sr = (el as HTMLElement).shadowRoot as ShadowRoot | null;
+      if (sr) {
+        for (let i = 0; i < sr.childNodes.length; i++) collect(sr.childNodes[i], out);
+      }
+    } else if ((node as any)?.nodeType === 11) {
+      // ShadowRoot / DocumentFragment (avoids referencing global ShadowRoot).
+      const frag = node as unknown as { childNodes: NodeListOf<ChildNode> };
+      for (let i = 0; i < frag.childNodes.length; i++) collect(frag.childNodes[i] as unknown as Node, out);
+      return;
+    }
+    const children = (node as ParentNode).childNodes;
+    if (children) {
+      for (let i = 0; i < children.length; i++) {
+        collect(children[i] as unknown as Node, out);
+      }
+    }
+  };
+
+  // Fast path: direct light-DOM / single shadow queries first.
+  for (const selector of selectors) {
+    try {
+      const found = root.querySelector<HTMLElement>(selector);
+      if (found && !isHidden(found)) {
+        if (found.tagName.toLowerCase() === 'button') return found;
+      }
+    } catch {}
+  }
   if (root.shadowRoot) {
     for (const selector of selectors) {
-      const found = root.shadowRoot.querySelector<HTMLElement>(selector);
-      if (found) return found;
+      try {
+        const found = root.shadowRoot.querySelector<HTMLElement>(selector);
+        if (found && !isHidden(found)) {
+          if (found.tagName.toLowerCase() === 'button') return found;
+        }
+      } catch {}
     }
   }
 
-  for (const child of Array.from(root.children)) {
-    if ((child as HTMLElement).shadowRoot) {
-      const found = queryDeep(child as HTMLElement, selectors);
-      if (found) return found;
-    }
-  }
-
-  return null;
+  const all: HTMLElement[] = [];
+  collect(root, all);
+  const visible = all.filter((el) => !isHidden(el));
+  const btn = visible.find((el) => el.tagName.toLowerCase() === 'button');
+  if (btn) return btn;
+  return visible[0] || null;
 }
 
 /**
@@ -468,7 +508,7 @@ export function parsePostElement(element: HTMLElement): ReelPost {
     score = parseScore(scoreAttr);
   } else {
     const scoreElem =
-      element.querySelector('[slot="credit-bar"], faceplate-number, [data-test-id="post-score"], .score') ||
+      element.querySelector('shreddit-post-vote-control [slot="score"], faceplate-number, [data-test-id="post-score"], .score, [slot="credit-bar"]') ||
       element.shadowRoot?.querySelector('faceplate-number, [data-testid="action-row"] faceplate-number');
     if (scoreElem) {
       const trimmed = scoreElem.textContent?.trim() || '';

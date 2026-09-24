@@ -1,15 +1,20 @@
 import { extractPosts, observeNewPosts } from './extractor/dom-extractor';
 import { proxyUpvote, proxyDownvote } from './extractor/vote-proxy';
 import { AudioManager, audioManager } from './media/audio-manager';
-import { resolveMedia } from './media';
+import { resolveMedia, initRedGifsBridge, isRedGifsFrame } from './media';
 import { unconstrainPostMedia } from './main';
 import './main';
+
+// Auto-initialize RedGifs bridge if running in RedGifs iframe context
+if (typeof window !== 'undefined' && isRedGifsFrame()) {
+  initRedGifsBridge();
+}
 
 export * from './extractor/types';
 export * from './extractor/dom-extractor';
 export * from './extractor/vote-proxy';
 export * from './media';
-export { unconstrainPostMedia };
+export { unconstrainPostMedia, initRedGifsBridge, isRedGifsFrame };
 
 // Expose on global window object for browser runtime and tests
 if (typeof window !== 'undefined') {

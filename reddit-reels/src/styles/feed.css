@@ -214,15 +214,13 @@ html.rr-active shreddit-post.rr-hide-captions [part="captions"] {
   opacity: 0 !important;
 }
 
-/* Suppress native Reddit UI in slides */
+/* Suppress native Reddit UI in slides (vote slots use off-screen hiding so proxy clicks work) */
 html.rr-active shreddit-post [slot="credit-bar"],
 html.rr-active shreddit-post [slot="post-credit-bar"],
 html.rr-active shreddit-post [slot="title-and-metadata"],
 html.rr-active shreddit-post [slot="title"],
 html.rr-active shreddit-post [slot="action-row"],
 html.rr-active shreddit-post [slot="text-body"],
-html.rr-active shreddit-post [slot="vote"],
-html.rr-active shreddit-post [slot="vote-button"],
 html.rr-active shreddit-post shreddit-post-action-row,
 html.rr-active shreddit-post feed-post-action-row,
 html.rr-active shreddit-post shreddit-post-credit-bar,
@@ -233,6 +231,34 @@ html.rr-active shreddit-post faceplate-tracker,
 html.rr-active .rr-native-suppressed {
   display: none !important;
   visibility: hidden !important;
+}
+
+/* Vote targets stay in DOM and clickable via proxy (off-screen, not display:none) */
+html.rr-active shreddit-post [slot="vote"],
+html.rr-active shreddit-post [slot="vote-button"],
+html.rr-active shreddit-post shreddit-post-vote-control,
+html.rr-active shreddit-post [data-testid="post-vote-control"],
+html.rr-active .rr-native-offscreen {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+
+/* Bare media taps must not navigate: only explicit overlay/card buttons open URLs */
+html.rr-active shreddit-post a[data-click-id="body"],
+html.rr-active shreddit-post a[slot="full-post-link"],
+html.rr-active shreddit-post [slot="post-media-container"] a:not(.rr-sub-badge):not(.rr-author),
+html.rr-active shreddit-post shreddit-media-lightbox-listener a {
+  pointer-events: none !important;
+}
+
+html.rr-active .rr-post-overlay a,
+html.rr-active .rr-link-card-container a,
+html.rr-active .rr-text-card-container a {
+  pointer-events: auto !important;
 }
 
 /* Videos-only filter: scoped under html.rr-active so exit automatically restores visibility */

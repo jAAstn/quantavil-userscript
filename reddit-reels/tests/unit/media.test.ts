@@ -163,7 +163,7 @@ describe('Direct DOM resolveMedia', () => {
 
     const res = resolveMedia(post);
     assert.equal(res.type, 'iframe');
-    assert.equal(res.src, 'https://www.redgifs.com/ifr/fancyjumpingfrog?muted=0');
+    assert.equal(res.src, 'https://www.redgifs.com/ifr/fancyjumpingfrog?muted=0&autoplay=1');
     assert.equal(res.hasAudio, true);
   });
 

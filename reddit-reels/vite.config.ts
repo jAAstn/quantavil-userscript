@@ -10,11 +10,13 @@ export default defineConfig({
         namespace: 'https://github.com/quantavil/userscript/tree/main/reddit-reels',
         match: [
           'https://*.reddit.com/*',
-          'https://reddit.com/*'
+          'https://reddit.com/*',
+          'https://*.redgifs.com/ifr/*',
+          'https://www.redgifs.com/ifr/*'
         ],
         description: 'Swipe Reddit feeds like reels: unmuted playback, galleries, and native voting.',
         author: 'quantavil',
-        version: '1.1.0',
+        version: '1.3.0',
         license: 'MIT',
         'run-at': 'document-end',
         homepage: 'https://github.com/quantavil/userscript/tree/main/reddit-reels',

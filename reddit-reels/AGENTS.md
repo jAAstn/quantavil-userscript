@@ -23,6 +23,7 @@ Guidance for agentic development on the **Reddit Reel Mode** userscript (`reddit
 - **Single-Media Focus Mutex**: `AudioManager` is the sole authority for media playback.
 - **Zero Audio Bleed**: Navigating between posts must immediately pause, mute, and reset all previous video elements and embedded iframes. Overlapping audio is strictly prohibited.
 - **Default State**: Audio begins unmuted by default unless explicitly toggled off by the user. Mute state persists across page reloads.
+- **RedGifs & External Iframe Protocol**: RedGifs embed iframes (`https://*.redgifs.com/ifr/*`) run the userscript directly in their context. The `redgifs-bridge` synchronizes mute, volume, and playback in real-time via `postMessage` (`SET_AUDIO`, `PAUSE`, `PLAY`) and shared `GM_getValue` storage without mutating `iframe.src` (which avoids destructive reloading).
 
 ---
 

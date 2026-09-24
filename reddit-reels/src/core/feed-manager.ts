@@ -153,7 +153,9 @@ export class FeedManager {
     const isLinkPost = post.postType === 'link';
     const isTextPost = post.postType === 'text';
 
-    // 1. Scoped cleanup of custom shadowRoot to prevent Reddit's native action bar and clutter from leaking
+    // 1. Scoped cleanup of custom shadowRoot to prevent Reddit's native action bar and clutter from leaking.
+    // Vote controls stay programmatically clickable: hide them off-screen
+    // instead of display:none so proxy .click() still reaches Lit handlers.
     if (postEl.shadowRoot) {
       if (!postEl.shadowRoot.querySelector('#rr-shadow-cleanup-style')) {
         const shadowStyle = document.createElement('style');
@@ -165,15 +167,22 @@ export class FeedManager {
           feed-post-action-row,
           [data-testid="action-row"],
           [data-testid="post-vote-control"],
-          shreddit-post-vote-control,
           shreddit-vote-animations,
           slot[name="share-button"],
           slot[name="credit-bar"],
-          slot[name="action-row"],
-          slot[name="vote"],
-          slot[name="vote-button"] {
+          slot[name="action-row"] {
             display: none !important;
             visibility: hidden !important;
+          }
+          shreddit-post-vote-control,
+          slot[name="vote"],
+          slot[name="vote-button"] {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            overflow: hidden !important;
           }
         `;
         postEl.shadowRoot.appendChild(shadowStyle);
@@ -226,7 +235,13 @@ export class FeedManager {
     }
     postEl.style.removeProperty('display');
 
-    // 4. Suppress native elements via scoped class (no inline style pollution)
+    // 4. Suppress native elements via scoped class (no inline style pollution).
+    // Vote slots use off-screen hiding so vote proxy clicks still work.
+    const NATIVE_SUPPRESSION_SELECTORS =
+      '[slot="credit-bar"], [slot="post-credit-bar"], [slot="title-and-metadata"], [slot="title"], [slot="action-row"], [slot="text-body"], shreddit-post-action-row, feed-post-action-row, shreddit-action-bar, rpl-action-bar, shreddit-post-credit-bar, faceplate-tracker, shreddit-interaction-container';
+    const VOTE_OFFSCREEN_SELECTORS =
+      '[slot="vote"], [slot="vote-button"], shreddit-post-vote-control, [data-testid="post-vote-control"]';
+
     Array.from(postEl.children).forEach((child) => {
       const el = child as HTMLElement;
       if (
@@ -236,11 +251,12 @@ export class FeedManager {
       ) {
         return;
       }
-      const isActionOrMeta = el.matches?.(
-        '[slot="credit-bar"], [slot="post-credit-bar"], [slot="title-and-metadata"], [slot="title"], [slot="action-row"], [slot="text-body"], [slot="vote"], [slot="vote-button"], shreddit-post-action-row, feed-post-action-row, shreddit-action-bar, rpl-action-bar, shreddit-post-credit-bar, faceplate-tracker, shreddit-interaction-container'
-      );
-      if (isActionOrMeta) {
+      if (el.matches?.(NATIVE_SUPPRESSION_SELECTORS)) {
         el.classList.add('rr-native-suppressed');
+        return;
+      }
+      if (el.matches?.(VOTE_OFFSCREEN_SELECTORS)) {
+        el.classList.add('rr-native-offscreen');
         return;
       }
       if (
@@ -256,10 +272,12 @@ export class FeedManager {
       el.classList.add('rr-native-suppressed');
     });
 
-    postEl.querySelectorAll<HTMLElement>(
-      '[slot="credit-bar"], [slot="post-credit-bar"], [slot="title-and-metadata"], [slot="title"], [slot="action-row"], [slot="text-body"], [slot="vote"], [slot="vote-button"], shreddit-post-action-row, feed-post-action-row, shreddit-action-bar, rpl-action-bar, shreddit-post-credit-bar, faceplate-tracker, shreddit-interaction-container'
-    ).forEach((el) => {
+    postEl.querySelectorAll<HTMLElement>(NATIVE_SUPPRESSION_SELECTORS).forEach((el) => {
       el.classList.add('rr-native-suppressed');
+    });
+
+    postEl.querySelectorAll<HTMLElement>(VOTE_OFFSCREEN_SELECTORS).forEach((el) => {
+      el.classList.add('rr-native-offscreen');
     });
 
     // 5. Render overlay rail and metadata
@@ -297,15 +315,17 @@ export class FeedManager {
     }
 
     // 4. Remove suppressed class and any lingering inline display styles on native children
-    postEl.querySelectorAll<HTMLElement>('.rr-native-suppressed').forEach((el) => {
-      el.classList.remove('rr-native-suppressed');
+    postEl.querySelectorAll<HTMLElement>('.rr-native-suppressed, .rr-native-offscreen').forEach((el) => {
+      el.classList.remove('rr-native-suppressed', 'rr-native-offscreen');
       el.style.removeProperty('display');
     });
-    Array.from(postEl.children).forEach((child) => {
-      const el = child as HTMLElement;
-      el.classList?.remove('rr-native-suppressed');
+    for (let i = 0; i < postEl.children.length; i++) {
+      const el = postEl.children[i] as HTMLElement;
+      if (el.classList?.contains('rr-native-suppressed') || el.classList?.contains('rr-native-offscreen')) {
+        el.classList.remove('rr-native-suppressed', 'rr-native-offscreen');
+      }
       el.style?.removeProperty('display');
-    });
+    }
 
     // 5. Restore media unconstraining & aspect ratio
     restorePostMedia(postEl);
@@ -354,14 +374,16 @@ export class FeedManager {
             applySubtitlesState(post, this.subtitlesEnabled);
             audioManager.requestPlayback(post);
           } else if (!entry.isIntersecting || entry.intersectionRatio < 0.2) {
-            // Inactive post: Immediately pause, mute, and reset
+            // Inactive post: pause + mute immediately (zero bleed).
+            // Progress reset is handled by requestPlayback when a new slide
+            // becomes active; resetting here causes play/reset thrash during
+            // snap-scroll settle (ratios oscillate around thresholds).
             applyAudioState(post, true);
             const video = audioManager.findVideo(post);
             if (video) {
               try {
                 if (!video.paused) video.pause();
                 video.muted = true;
-                video.currentTime = 0;
               } catch {}
             }
           }

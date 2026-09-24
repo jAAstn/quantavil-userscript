@@ -141,47 +141,36 @@ export function renderReelOverlay(
   if (upvoteBtn) {
     upvoteBtn.onclick = (e) => {
       e.stopPropagation();
-      proxyUpvote(post);
-      const isUp = !!post.isUpvoted;
-      const isDown = !!post.isDownvoted;
-
-      upvoteBtn.classList.toggle('is-active-up', isUp);
-      upvoteBtn.innerHTML = getUpvoteIconSvg(isUp);
-
-      if (downvoteBtn) {
-        downvoteBtn.classList.toggle('is-active-down', isDown);
-        downvoteBtn.innerHTML = getDownvoteIconSvg(isDown);
-      }
-
-      if (scoreLabel) {
-        const curVal = isUp ? 1 : isDown ? -1 : 0;
-        const newScore = baseScore + (curVal - initialVoteVal);
-        scoreLabel.textContent = formatScoreDisplay(newScore, isUp || isDown);
-      }
+      const ok = proxyUpvote(post, () => syncVoteUI());
+      syncVoteUI(!ok);
     };
   }
 
   if (downvoteBtn) {
     downvoteBtn.onclick = (e) => {
       e.stopPropagation();
-      proxyDownvote(post);
-      const isUp = !!post.isUpvoted;
-      const isDown = !!post.isDownvoted;
+      const ok = proxyDownvote(post, () => syncVoteUI());
+      syncVoteUI(!ok);
+    };
+  }
 
+  function syncVoteUI(revert = false): void {
+    const isUp = revert ? initialVoteVal === 1 : !!post.isUpvoted;
+    const isDown = revert ? initialVoteVal === -1 : !!post.isDownvoted;
+
+    if (upvoteBtn) {
+      upvoteBtn.classList.toggle('is-active-up', isUp);
+      upvoteBtn.innerHTML = getUpvoteIconSvg(isUp);
+    }
+    if (downvoteBtn) {
       downvoteBtn.classList.toggle('is-active-down', isDown);
       downvoteBtn.innerHTML = getDownvoteIconSvg(isDown);
-
-      if (upvoteBtn) {
-        upvoteBtn.classList.toggle('is-active-up', isUp);
-        upvoteBtn.innerHTML = getUpvoteIconSvg(isUp);
-      }
-
-      if (scoreLabel) {
-        const curVal = isDown ? -1 : isUp ? 1 : 0;
-        const newScore = baseScore + (curVal - initialVoteVal);
-        scoreLabel.textContent = formatScoreDisplay(newScore, isUp || isDown);
-      }
-    };
+    }
+    if (scoreLabel) {
+      const curVal = isUp ? 1 : isDown ? -1 : 0;
+      const newScore = baseScore + (curVal - initialVoteVal);
+      scoreLabel.textContent = formatScoreDisplay(newScore, isUp || isDown);
+    }
   }
 
   if (commentBtn) {

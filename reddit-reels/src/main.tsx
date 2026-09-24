@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import './style.css';
-import { audioManager, unlockAudio } from './media';
+import { audioManager, unlockAudio, listenForRedGifsReady } from './media';
 import {
   FabButton,
   createTopBar,
@@ -12,11 +12,13 @@ import {
   getClosestPostToViewport,
   unconstrainPostMedia,
 } from './core';
+import { parsePostElement } from './extractor';
 
 export { unconstrainPostMedia };
 
 let isReelModeActive = false;
 let topBarElement: HTMLElement | null = null;
+let stopRedgifsReady: (() => void) | null = null;
 
 function syncTopBarSound(): void {
   // Single global mute control lives in the top bar.
@@ -44,6 +46,15 @@ const feedManager = new FeedManager({
 const inputController = new InputController({
   isReelModeActive: () => isReelModeActive,
   getActivePost: () => getClosestPostToViewport(),
+  getActiveReelPost: () => {
+    const el = getClosestPostToViewport();
+    if (!el) return null;
+    try {
+      return parsePostElement(el);
+    } catch {
+      return null;
+    }
+  },
   onExit: () => toggleReelMode(false),
   onToggleMute: handleToggleMute,
   onVolumeChange: handleVolumeChange,
@@ -95,6 +106,12 @@ export function toggleReelMode(forceState?: boolean): void {
 
     feedManager.startObservers();
     inputController.attach();
+    if (!stopRedgifsReady) {
+      stopRedgifsReady = listenForRedGifsReady(() => ({
+        muted: audioManager.isMuted,
+        volume: audioManager.volume,
+      }));
+    }
   } else {
     document.documentElement.classList.remove('rr-active');
     feedContainer?.classList.remove('rr-feed-container');
@@ -112,6 +129,11 @@ export function toggleReelMode(forceState?: boolean): void {
 }
 
 function init(): void {
+  // If running inside RedGifs iframe, do not inject Reddit Reel UI (handled by redgifs-bridge)
+  if (typeof window !== 'undefined' && /redgifs\.com/i.test(window.location.hostname)) {
+    return;
+  }
+
   const fabContainerId = 'rr-fab-container';
   let fabContainer = document.getElementById(fabContainerId);
   if (!fabContainer) {

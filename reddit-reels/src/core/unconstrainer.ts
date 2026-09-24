@@ -192,13 +192,7 @@ export function unconstrainPlayerShadow(player: HTMLElement): void {
         :host(.rr-hide-captions) shreddit-player-captions,
         :host(.rr-hide-captions) .caption-wrapper,
         :host(.rr-hide-captions) .caption-container,
-        :host(.rr-hide-captions) [part="captions"],
-        :host-context(.rr-hide-captions) ::cue,
-        :host-context(.rr-hide-captions) .captions-display,
-        :host-context(.rr-hide-captions) [data-testid="captions"],
-        :host-context(.rr-hide-captions) shreddit-player-captions,
-        :host-context(.rr-hide-captions) .caption-wrapper,
-        :host-context(.rr-hide-captions) [part="captions"] {
+        :host(.rr-hide-captions) [part="captions"] {
           display: none !important;
           visibility: hidden !important;
           opacity: 0 !important;

@@ -7,6 +7,8 @@
 declare function GM_getValue<T>(key: string, defaultValue?: T): T;
 declare function GM_setValue<T>(key: string, value: T): void;
 
+import { hydrateVideoFromPlayer, ensureAutoplayAttrs } from './video-hydrator';
+
 const STORAGE_KEY = 'reddit_reels_muted';
 
 /**
@@ -95,6 +97,32 @@ export function normalizeIframeSrc(src: string, isMuted: boolean): string {
   }
   const sep = src.includes('?') ? '&' : '?';
   return `${src}${sep}${target}`;
+}
+
+/** Ask an embed to start via bridge protocol (no src mutation). */
+export function sendIframePlay(ifr: HTMLIFrameElement): void {
+  try {
+    if (!ifr.src || ifr.src === 'about:blank') return;
+    ifr.contentWindow?.postMessage({ source: 'reddit-reels', type: 'PLAY' }, '*');
+    ifr.contentWindow?.postMessage({ action: 'play', type: 'play' }, '*');
+  } catch {}
+}
+
+/** Listen for RedGifs bridge READY and reply with current audio + PLAY. */
+export function listenForRedGifsReady(getState: () => { muted: boolean; volume: number }): () => void {
+  const handler = (event: MessageEvent) => {
+    try {
+      const data = event.data as any;
+      if (!data || data.source !== 'redgifs-bridge' || data.type !== 'READY') return;
+      const src = event.source as Window | null;
+      if (!src || typeof src.postMessage !== 'function') return;
+      const { muted, volume } = getState();
+      src.postMessage({ source: 'reddit-reels', type: 'SET_AUDIO', muted, volume }, '*');
+      src.postMessage({ source: 'reddit-reels', type: 'PLAY' }, '*');
+    } catch {}
+  };
+  window.addEventListener('message', handler);
+  return () => window.removeEventListener('message', handler);
 }
 
 /** Keep keyboard focus on the parent page so volume hotkeys keep working. */
@@ -235,13 +263,22 @@ export function applyAudioState(container: HTMLElement, isMuted: boolean, volume
     } catch {}
   }
 
-  // 4. Update iframes (e.g. RedGifs embed).
-  // postMessage is best-effort only; src `muted=` param is the real switch.
+  // 4. Update iframes (e.g. RedGifs embed) via seamless postMessage bridge.
+  // Never mutate ifr.src on mute/volume toggles: reloading iframes kills playback position and causes rebuffering.
   const iframes = container.querySelectorAll<HTMLIFrameElement>('iframe');
   for (const ifr of iframes) {
     try {
-      // Skip blanked (zero-bleed) iframes; caller restores + normalizes them.
       if (!ifr.src || ifr.src === 'about:blank') continue;
+      // Dispatch both internal reddit-reels bridge protocol and standard generic format
+      ifr.contentWindow?.postMessage(
+        {
+          source: 'reddit-reels',
+          type: 'SET_AUDIO',
+          muted: isMuted,
+          volume: level,
+        },
+        '*'
+      );
       ifr.contentWindow?.postMessage(
         {
           action: isMuted ? 'mute' : 'unmute',
@@ -251,11 +288,6 @@ export function applyAudioState(container: HTMLElement, isMuted: boolean, volume
         },
         '*'
       );
-
-      const next = normalizeIframeSrc(ifr.src, isMuted);
-      if (next !== ifr.src) {
-        ifr.src = next;
-      }
     } catch {}
   }
 }
@@ -402,26 +434,43 @@ export class AudioManager {
       iframes.forEach((ifr) => {
         try {
           const stored = ifr.dataset.rrSrc;
-          const current = ifr.src === 'about:blank' && stored ? stored : ifr.src;
-          if (!current || current === 'about:blank') return;
-          const next = normalizeIframeSrc(current, this._isMuted);
-          if (ifr.src === 'about:blank') ifr.src = next;
-          else if (next !== ifr.src) ifr.src = next;
+          if (ifr.src === 'about:blank' && stored) {
+            ifr.src = normalizeIframeSrc(stored, this._isMuted);
+          }
           ifr.tabIndex = -1;
         } catch {}
       });
 
       applyAudioState(targetContainer, this._isMuted, this._volume);
+      iframes.forEach((ifr) => sendIframePlay(ifr));
       blurIframes(targetContainer);
     }
 
     if (targetVideo) {
+      // Re-entry guard: already playing this slide, just sync audio state.
+      if (targetContainer && targetContainer === this.activeContainer && !targetVideo.paused && (targetVideo as any).currentSrc) {
+        applyAudioState(targetContainer, this._isMuted, this._volume);
+        return;
+      }
+      ensureAutoplayAttrs(targetVideo);
+      // Hydrate lazy shreddit-player-2 videos (empty src until visible).
+      if (targetContainer && (!(targetVideo as any).currentSrc || (targetVideo as any).readyState === 0)) {
+        hydrateVideoFromPlayer(targetContainer, targetVideo);
+      }
       targetVideo.muted = this._isMuted;
       targetVideo.volume = this._isMuted ? 0 : this._volume;
-      targetVideo.playsInline = true;
       targetVideo.play().catch((err: Error) => {
-        // If unmuted autoplay blocked by browser policy without gesture, fallback to muted
-        if (!targetVideo.muted && (err.name === 'NotAllowedError' || err.name === 'AbortError')) {
+        // Unmuted autoplay blocked without gesture -> muted fallback.
+        // Empty-src lazy HLS -> hydrate once and retry.
+        if (!targetVideo) return;
+        const name = (err && err.name) || '';
+        if (name === 'NotSupportedError') {
+          if (targetContainer) hydrateVideoFromPlayer(targetContainer, targetVideo);
+          targetVideo.muted = true;
+          targetVideo.play().catch(() => {});
+          return;
+        }
+        if (!targetVideo.muted && (name === 'NotAllowedError' || name === 'AbortError')) {
           targetVideo.muted = true;
           targetVideo.play().catch(() => {});
         }
@@ -489,15 +538,17 @@ export class AudioManager {
   public reassertActiveIframeUnmute(): void {
     if (this._isMuted || !this.activeContainer) return;
     try {
-      this.activeContainer.querySelectorAll<HTMLIFrameElement>('iframe').forEach((ifr) => {
+      const iframes = this.activeContainer.querySelectorAll<HTMLIFrameElement>('iframe');
+      iframes.forEach((ifr) => {
         try {
-          const stored = ifr.src === 'about:blank' ? ifr.dataset.rrSrc : ifr.src;
-          if (!stored || stored === 'about:blank') return;
-          const next = normalizeIframeSrc(stored, false);
-          if (ifr.src !== next) ifr.src = next;
+          const stored = ifr.dataset.rrSrc;
+          if (ifr.src === 'about:blank' && stored) {
+            ifr.src = normalizeIframeSrc(stored, false);
+          }
         } catch {}
       });
       applyAudioState(this.activeContainer, false, this._volume);
+      iframes.forEach((ifr) => sendIframePlay(ifr));
     } catch {}
   }
 
@@ -556,6 +607,7 @@ export class AudioManager {
       const allIframes = document.querySelectorAll<HTMLIFrameElement>('iframe');
       allIframes.forEach((ifr) => {
         try {
+          ifr.contentWindow?.postMessage({ source: 'reddit-reels', type: 'PAUSE', muted: true }, '*');
           ifr.contentWindow?.postMessage({ action: 'pause', muted: true }, '*');
         } catch {}
       });

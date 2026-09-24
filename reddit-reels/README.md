@@ -15,7 +15,7 @@ An immersive, high-performance Userscript for **Tampermonkey** and **Violentmonk
 - **The Solution**: 
   - Audio starts **unmuted by default**.
   - A strict **Single-Media Focus Mutex** (`AudioManager`) ensures that navigating to any post immediately pauses, mutes, and resets all previous media elements and iframes. Exactly one audio stream is active at any time.
-  - RedGifs/Streamable embeds unmute via the `muted=0/1` src param (these players ignore generic postMessage mute), normalized both directions and re-asserted after the first tap/keypress that unlocks autoplay.
+  - RedGifs/Streamable embeds run the userscript directly in their context via the `redgifs-bridge` protocol (`SET_AUDIO`, `PAUSE`, `PLAY`), seamlessly synchronizing audio state in real-time without reloading the iframe.
   - Global sound and volume state persists seamlessly across sessions.
 
 ### 2. 📐 Smart Aspect Ratio & Containment (No Cropped Memes)
@@ -37,8 +37,9 @@ An immersive, high-performance Userscript for **Tampermonkey** and **Violentmonk
 - **Crossposts**: Stripped of nested duplicate headers and banners for a clean presentation.
 
 ### 6. 🎬 Native RedGifs & Streamable Video Support
-- Embedded video hosts (`redgifs.com`, `streamable.com`, `gfycat.com`) are automatically classified as video posts and mounted as full-bleed, autoplaying responsive iframes rather than static link cards.
-- Iframes stay keyboard-focus-free (`tabindex=-1` + blur) so hotkeys keep working. Volume keys unmute/mute embeds (cross-origin players expose no fine-grained volume API).
+- Embedded video hosts (`redgifs.com`, `streamable.com`, `gfycat.com`) are automatically classified as video posts and mounted as responsive iframes rather than static link cards.
+- The `redgifs-bridge` subsystem runs inside matched `redgifs.com/ifr/*` iframes, providing direct DOM audio and playback control without destructive reloads.
+- Iframes stay keyboard-focus-free (`tabindex=-1` + blur) so hotkeys keep working. Volume keys and mute controls seamlessly sync via the bridge protocol.
 
 ### 7. ⌨️ Desktop Keyboard Navigation
 - `J` / `ArrowDown` — Navigate to next reel
@@ -124,10 +125,11 @@ reddit-reels/
 │       └── index.ts
 └── tests/
     ├── fixtures/               # Mock Reddit DOM, fixture bundles & test server
-    ├── unit/                   # Fast unit tests (Bun test runner, 38 tests)
+    ├── unit/                   # Fast unit tests (Bun test runner, 42 tests)
     │   ├── extractor.test.ts   # DOM extractor & voting proxy tests
     │   ├── media.test.ts       # Audio mutex & media resolver tests
-    │   └── teardown.test.ts    # Feed restoration, teardown, carousel & audit tests
+    │   ├── teardown.test.ts    # Feed restoration, teardown, carousel & audit tests
+    │   └── redgifs-bridge.test.ts # RedGifs bridge & message protocol tests
     ├── fab.spec.ts             # Playwright: FAB launcher visibility/behavior
     ├── dom-extractor.spec.ts   # Playwright: DOM extraction on mock Reddit
     ├── voting-proxy.spec.ts    # Playwright: native vote delegation
@@ -146,7 +148,7 @@ reddit-reels/
 bun install
 ```
 
-### 2. Run Unit Tests (38 Tests)
+### 2. Run Unit Tests (42 Tests)
 ```bash
 bun test tests/unit
 ```

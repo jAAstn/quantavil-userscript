@@ -4,6 +4,8 @@ import { audioManager, AudioManager, normalizeIframeSrc } from './audio-manager'
 
 export * from './types';
 export * from './audio-manager';
+export * from './redgifs-bridge';
+export * from './video-hydrator';
 
 /**
  * Direct DOM media resolver.
@@ -50,9 +52,14 @@ export function resolveMedia(post: ReelPost): ResolvedMedia {
   // 2. Embedded iframe (e.g. RedGifs, Streamable, YouTube)
   const iframe = el.querySelector<HTMLIFrameElement>('iframe');
   if (iframe && iframe.src) {
+    let src = normalizeIframeSrc(iframe.src, audioManager.isMuted);
+    // Native embeds often lack autoplay param; inject it so slides start on activation.
+    if (/redgifs\.com|streamable\.com|gfycat\.com/i.test(src) && !/[?&]autoplay=/.test(src)) {
+      src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
+    }
     return {
       type: 'iframe',
-      src: normalizeIframeSrc(iframe.src, audioManager.isMuted),
+      src,
       hasAudio: true,
       element: iframe,
     };
@@ -73,9 +80,11 @@ export function resolveMedia(post: ReelPost): ResolvedMedia {
         hasAudio: false,
       };
     }
+    // Boot muted so browser autoplay policy lets the reel start immediately.
+    // Audible state is restored after a user gesture via SET_AUDIO + PLAY.
     return {
       type: 'iframe',
-      src: normalizeIframeSrc(`https://www.redgifs.com/ifr/${match[1]}?autoplay=1&muted=0`, audioManager.isMuted),
+      src: normalizeIframeSrc(`https://www.redgifs.com/ifr/${match[1]}?autoplay=1&muted=1`, audioManager.isMuted),
       hasAudio: true,
     };
   }
