@@ -12,7 +12,8 @@ export function navigateGrid(
 
   if (!selected) {
     // If nothing is selected, select the first thumbnail
-    selectThumb(list[0]);
+    const first = list[0];
+    if (first) selectThumb(first);
     return;
   }
 
@@ -66,9 +67,9 @@ export function navigateGrid(
   if (!bestMatch) {
     const idx = list.indexOf(selected);
     if (direction === 'left' && idx > 0) {
-      bestMatch = list[idx - 1];
+      bestMatch = list[idx - 1] ?? null;
     } else if (direction === 'right' && idx < list.length - 1) {
-      bestMatch = list[idx + 1];
+      bestMatch = list[idx + 1] ?? null;
     }
   }
 

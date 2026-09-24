@@ -14,25 +14,28 @@ export interface FullMeta {
 export const metaCache = new Map<string, FullMeta | null>();
 
 // Backwards-compatible persistent localStorage cache
+interface StoredEntry {
+  url?: unknown;
+  sizeString?: unknown;
+  size?: unknown;
+}
+
 export const C = (() => {
-  let d: Record<string, any>;
+  let d: Record<string, StoredEntry>;
   try {
-    d = JSON.parse(localStorage.getItem('whc2') || '{}');
+    d = JSON.parse(localStorage.getItem('whc2') || '{}') as Record<string, StoredEntry>;
   } catch {
     d = {};
   }
   return {
     get(id: string): CachedMeta | null {
       const entry = d[id];
-      if (!entry) return null;
-      // Backwards-compatibility check
-      if (entry.url) {
-        return {
-          url: entry.url,
-          sizeString: entry.sizeString || (entry.size ? fmtSz(entry.size) : '')
-        };
+      if (!entry || typeof entry.url !== 'string') return null;
+      // Backwards-compatibility: very old entries stored raw byte counts
+      if (typeof entry.sizeString === 'string') {
+        return { url: entry.url, sizeString: entry.sizeString };
       }
-      return null;
+      return { url: entry.url, sizeString: typeof entry.size === 'number' ? fmtSz(entry.size) : '' };
     },
     set(id: string, v: CachedMeta) {
       d[id] = v;

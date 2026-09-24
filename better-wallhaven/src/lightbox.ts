@@ -1,6 +1,7 @@
 import { C, type CachedMeta } from './cache';
 import { loadMeta } from './api';
-import { dlFile } from './sidebar';
+import { dlFile, fileNameOf } from './download';
+import { I } from './icons';
 
 export interface LightboxElements {
   lb: HTMLElement;
@@ -21,13 +22,13 @@ export function createLightbox(): LightboxElements {
     <div class="whlb-bar">
       <span class="whlb-info"></span>
       <div class="whlb-btns">
-        <button class="whlb-action whlb-dl">⬇ Download (D)</button>
-        <button class="whlb-action whlb-close">✕ Close (Esc)</button>
+        <button class="whlb-action whlb-dl">${I.download}<span>Download</span></button>
+        <button class="whlb-action whlb-close">${I.close}<span>Close</span></button>
       </div>
     </div>
-    <button class="whlb-arrow whlb-prev">‹</button>
+    <button class="whlb-arrow whlb-prev" aria-label="Previous">${I.prev}</button>
     <img class="whlb-img">
-    <button class="whlb-arrow whlb-next">›</button>
+    <button class="whlb-arrow whlb-next" aria-label="Next">${I.next}</button>
   `;
   document.body.appendChild(lb);
 
@@ -61,7 +62,7 @@ export class LightboxManager {
     this.els.next.addEventListener('click', () => this.step(1));
     this.els.dl.addEventListener('click', () => {
       if (this.currentData) {
-        dlFile(this.currentData.url, this.currentData.url.split('/').pop() || 'wallpaper.png');
+        dlFile(this.currentData.url, fileNameOf(this.currentData.url, 'wallpaper.png'));
       }
     });
 
@@ -83,7 +84,7 @@ export class LightboxManager {
         case 'D':
           if (!e.ctrlKey && !e.altKey && !e.metaKey && this.currentData) {
             e.preventDefault();
-            dlFile(this.currentData.url, this.currentData.url.split('/').pop() || 'wallpaper.png');
+            dlFile(this.currentData.url, fileNameOf(this.currentData.url, 'wallpaper.png'));
           }
           break;
       }
@@ -94,13 +95,17 @@ export class LightboxManager {
     return this.els.lb.classList.contains('on');
   }
 
-  public open(id: string) {
+  public open(id: string, previewUrl?: string) {
     this.currentId = id;
     this.els.lb.classList.add('on');
     this.els.img.removeAttribute('src');
-    this.els.loading.textContent = 'Loading…';
+    this.els.loading.textContent = 'Loading HD (4KB + image)…';
     this.els.info.textContent = id;
     this.currentData = null;
+    if (previewUrl) {
+      this.els.img.src = previewUrl;
+      this.els.loading.textContent = 'Loading full…';
+    }
 
     // Try persistent cache
     const cached = C.get(id);
