@@ -69,6 +69,7 @@ A curated, production-grade monorepo of modern userscripts, browser extensions, 
 | Project | Description |
 | :--- | :--- |
 | **[site-orbit](./site-orbit)** | Private Domain & Tech Observatory caching verified Tranco global ranks, live in-DOM tech stacks, Cloudflare DNS/Infra, and browser telemetry. |
+| **[better-leetcode](./better-leetcode)** | LeetCode exporter formatting problems, examples, constraints, hints, code templates, failed test submissions, and comments into structured Markdown with customizable LLM prompts. |
 | **[better-investograin](./better-investograin)** | InvestorGain IPO table optimizer that blocks broker ads/sidebars and auto-sorts open, upcoming, and closed IPOs by true urgency with clean dividers. |
 | **[testbook-plus](./testbook-plus)** | Testbook test suite crawler and exporter that cleans tracking scripts, preserves MathJax formulas as LaTeX, and converts question papers to clean Markdown. |
 | **[guidely-plus](./guidely-plus)** | Guidely test review crawler that enables text selection/copying and exports full tests and solutions to structured Markdown. |
