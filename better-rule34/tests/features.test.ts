@@ -1,234 +1,161 @@
-import { describe, expect, it } from 'bun:test';
-import {
-  canonicalListKey,
-  clearBookmark,
-  deleteSector,
-  deleteVideo,
-  exportArchiveJson,
-  findSector,
-  formatSectorTitleFromUrl,
-  getBookmark,
-  getSectors,
-  getTotalBookmarkCount,
-  getVideos,
-  importArchiveJson,
-  isVideoSaved,
-  saveSector,
-  saveVideo,
-  setBookmark,
-  type BookmarkStore,
-} from '../src/bookmark';
+import { beforeEach, describe, expect, it } from 'bun:test';
+import { pickTop } from '../src/autoplay';
 import { shouldNewTabClick } from '../src/newtab';
-import { videoIdFromHref, viewsToNearestStep } from '../src/parse';
+import { videoIdFromHref } from '../src/parse';
+import {
+  loadFilter,
+  nearestPreset,
+  RATING_PRESETS,
+  ratingLabel,
+  VIEWS_PRESETS,
+  viewsLabel,
+} from '../src/sheetfilter';
+import { createCoverageTracker, watchIdFromPath } from '../src/watchtrack';
+import {
+  isWatched,
+  markWatched,
+  MAX_RECORDS,
+  parseWatchMap,
+  pruneWatchMap,
+  setWatchStoreForTests,
+  toggleWatched,
+  unmarkWatched,
+  type KeyValueStore,
+} from '../src/watchstore';
 
-function memStore(): BookmarkStore {
-  const map = new Map<string, string>();
+function memStore(): KeyValueStore {
+  const data = new Map<string, string>();
   return {
-    getItem: (k) => (map.has(k) ? map.get(k)! : null),
-    setItem: (k, v) => void map.set(k, v),
-    removeItem: (k) => void map.delete(k),
+    getItem: (k: string) => data.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      data.set(k, v);
+    },
   };
 }
 
-const origin = 'https://rule34video.com';
+describe('new tab clicks', () => {
+  const plain = { button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false };
 
-describe('videoIdFromHref', () => {
-  it('extracts numeric ids and rejects non-video hrefs', () => {
-    expect(videoIdFromHref('/video/12345/slug/')).toBe('12345');
-    expect(videoIdFromHref(`${origin}/video/987/`)).toBe('987');
-    expect(videoIdFromHref('/latest-updates/2/')).toBe('');
-    expect(videoIdFromHref('')).toBe('');
-  });
-});
-
-describe('viewsToNearestStep', () => {
-  const steps = [0, 1000, 5000, 10000, 25000, 50000, 100000];
-  it('snaps exact, near, and migrated values to the closest step', () => {
-    expect(viewsToNearestStep(5000, steps)).toBe(2);
-    expect(viewsToNearestStep(90000, steps)).toBe(6);
-    expect(viewsToNearestStep(1000000, steps)).toBe(6);
-    expect(viewsToNearestStep(0, steps)).toBe(0);
-  });
-});
-
-describe('shouldNewTabClick', () => {
-  it('intercepts only plain left-clicks', () => {
-    const plain = { button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false };
+  it('intercepts only plain left clicks', () => {
     expect(shouldNewTabClick(plain)).toBe(true);
     expect(shouldNewTabClick({ ...plain, button: 1 })).toBe(false);
     expect(shouldNewTabClick({ ...plain, ctrlKey: true })).toBe(false);
-    expect(shouldNewTabClick({ ...plain, metaKey: true })).toBe(false);
-    expect(shouldNewTabClick({ ...plain, shiftKey: true })).toBe(false);
   });
 });
 
-describe('canonicalListKey', () => {
-  it('strips page params and trailing page segments, sorts the rest', () => {
-    expect(canonicalListKey(`${origin}`)).toBe('/latest-updates/');
-    expect(canonicalListKey(`${origin}/`)).toBe('/latest-updates/');
-    expect(canonicalListKey(`${origin}/latest-updates/`)).toBe('/latest-updates/');
-    expect(canonicalListKey(`${origin}/latest-updates/3/?from_videos=3`)).toBe('/latest-updates/');
-    expect(canonicalListKey(`${origin}/latest-updates/32/`)).toBe('/latest-updates/');
-    expect(canonicalListKey(`${origin}/search/?q=a&from_videos=48&q=a`)).toBe('/search/?q=a&q=a');
-    expect(canonicalListKey(`${origin}/search/?q=overwatch&from_videos+from_albums=32`)).toBe('/search/?q=overwatch');
-    expect(canonicalListKey(`${origin}/tags/futa/2/`)).toBe('/tags/futa/');
-    // Preserves tag ID while stripping page number
-    expect(canonicalListKey(`${origin}/tags/5568/`)).toBe('/tags/5568/');
-    expect(canonicalListKey(`${origin}/tags/5568/2/`)).toBe('/tags/5568/');
-    expect(canonicalListKey(`${origin}/tags/5568/32/`)).toBe('/tags/5568/');
-    // Preserves category slug while stripping page number
-    expect(canonicalListKey(`${origin}/categories/ben-10/`)).toBe('/categories/ben-10/');
-    expect(canonicalListKey(`${origin}/categories/ben-10/2/`)).toBe('/categories/ben-10/');
+describe('video ids', () => {
+  it('reads ids from card hrefs and watch paths', () => {
+    expect(videoIdFromHref('/video/4655090/built-for-bbc-pmv-hmv/')).toBe('4655090');
+    expect(videoIdFromHref('/videos/4655090/built-for-bbc-pmv-hmv/')).toBe('4655090');
+    expect(watchIdFromPath('/video/4490089/original-character-luo-liuyuan/')).toBe('4490089');
+    expect(watchIdFromPath('/videos/4490089/original-character-luo-liuyuan/')).toBe('4490089');
+    expect(watchIdFromPath('/')).toBeNull();
+    expect(watchIdFromPath('/tags/12/')).toBeNull();
   });
 });
 
-describe('bookmark store', () => {
-  it('round-trips one bookmark per listing key', () => {
-    const store = memStore();
-    expect(getBookmark('/latest-updates/', store)).toBeNull();
-    setBookmark('/latest-updates/', { page: 4, url: `${origin}/latest-updates/4/` }, store);
-    expect(getBookmark('/latest-updates/', store)).toEqual({
-      page: 4,
-      url: `${origin}/latest-updates/4/`,
+describe('autoplay selection', () => {
+  it('takes the most visible items above the threshold, capped', () => {
+    const items = [
+      { item: 'a', ratio: 0.2 },
+      { item: 'b', ratio: 0.9 },
+      { item: 'c', ratio: 0.7 },
+      { item: 'd', ratio: 0.65 },
+      { item: 'e', ratio: 1 },
+    ];
+    expect(pickTop(items, 2, 0.6)).toEqual(['e', 'b']);
+    expect(pickTop(items, 10, 0.6)).toEqual(['e', 'b', 'c', 'd']);
+    expect(pickTop(items, 0, 0.6)).toEqual([]);
+  });
+});
+
+describe('sheet filter choices', () => {
+  it('loads saved choices and falls back to Any when unreadable', () => {
+    expect(loadFilter(null)).toEqual({ minRating: 0, minViews: 0 });
+    expect(loadFilter('not json')).toEqual({ minRating: 0, minViews: 0 });
+    expect(loadFilter(JSON.stringify({ minRating: 'x', minViews: null }))).toEqual({ minRating: 0, minViews: 0 });
+  });
+
+  it('snaps saved values to the nearest choice and clamps out-of-range ones', () => {
+    expect(loadFilter(JSON.stringify({ minRating: 78, minViews: 4000 }))).toEqual({ minRating: 80, minViews: 5000 });
+    expect(loadFilter(JSON.stringify({ minRating: 500, minViews: -5 }))).toEqual({ minRating: 95, minViews: 0 });
+    expect(nearestPreset(999999, VIEWS_PRESETS)).toBe(500000);
+    expect(nearestPreset(72000, VIEWS_PRESETS)).toBe(75000);
+    expect(nearestPreset(300, VIEWS_PRESETS)).toBe(0);
+    expect(RATING_PRESETS).toEqual([0, 50, 60, 70, 75, 80, 85, 90, 95]);
+    expect(VIEWS_PRESETS).toEqual([0, 1000, 5000, 10000, 25000, 50000, 75000, 100000, 250000, 500000]);
+  });
+
+  it('ignores the removed sound and autoplay settings', () => {
+    expect(loadFilter(JSON.stringify({ minRating: 70, soundOnly: true, autoplay: false }))).toEqual({
+      minRating: 70,
+      minViews: 0,
     });
-    // Other listings are independent
-    expect(getBookmark('/search/?q=a', store)).toBeNull();
-    clearBookmark('/latest-updates/', store);
-    expect(getBookmark('/latest-updates/', store)).toBeNull();
   });
 
-  it('rejects invalid bookmarks', () => {
-    const store = memStore();
-    setBookmark('/x/', { page: 0, url: `${origin}/x/` }, store);
-    setBookmark('/x/', { page: 2, url: '' }, store);
-    setBookmark('', { page: 2, url: `${origin}/x/` }, store);
-    expect(getBookmark('/x/', store)).toBeNull();
+  it('labels choices', () => {
+    expect(ratingLabel(0)).toBe('Any');
+    expect(ratingLabel(80)).toBe('80%+');
+    expect(viewsLabel(0)).toBe('Any');
+    expect(viewsLabel(5000)).toBe('5K+');
+    expect(viewsLabel(1_000_000)).toBe('1M+');
   });
 });
 
-describe('multi-sector bookmarks', () => {
-  it('supports multiple page bookmarks per listing and across listings', () => {
-    const store = memStore();
-    saveSector(
-      {
-        listKey: '/tags/futa/',
-        title: 'TAG // FUTA',
-        url: `${origin}/tags/futa/4/`,
-        page: 4,
-      },
-      store,
-    );
-    saveSector(
-      {
-        listKey: '/tags/futa/',
-        title: 'TAG // FUTA',
-        url: `${origin}/tags/futa/18/`,
-        page: 18,
-      },
-      store,
-    );
-    saveSector(
-      {
-        listKey: '/search/?q=overwatch',
-        title: 'SEARCH // OVERWATCH [POST_DATE]',
-        url: `${origin}/search/overwatch/?sort_by=post_date&from_videos=2`,
-        page: 2,
-        sortBy: 'post_date',
-      },
-      store,
-    );
+describe('coverage tracker', () => {
+  it('reaches 85% of the duration during continuous playback', () => {
+    const tracker = createCoverageTracker(100);
+    const results: boolean[] = [];
+    for (let s = 0; s <= 90; s++) results.push(tracker.update(s, true));
+    expect(results.indexOf(true)).toBe(84);
+    expect(results.filter(Boolean).length).toBe(1);
+  });
 
-    const sectors = getSectors(store);
-    expect(sectors.length).toBe(3);
-    expect(findSector('/tags/futa/', 4, store)).not.toBeNull();
-    expect(findSector('/tags/futa/', 18, store)).not.toBeNull();
-    expect(findSector('/tags/futa/', 99, store)).toBeNull();
-
-    const targetId = findSector('/tags/futa/', 4, store)!.id;
-    deleteSector(targetId, store);
-    expect(getSectors(store).length).toBe(2);
-    expect(findSector('/tags/futa/', 4, store)).toBeNull();
+  it('does not count seeks or paused time', () => {
+    const tracker = createCoverageTracker(100);
+    tracker.update(0, true);
+    tracker.update(1, true);
+    expect(tracker.update(90, true)).toBe(false);
+    expect(tracker.covered).toBe(3);
+    expect(tracker.update(0, false)).toBe(false);
   });
 });
 
-describe('video bookmarks (watch later)', () => {
-  it('saves, checks, deletes, and counts video bookmarks', () => {
-    const store = memStore();
-    expect(isVideoSaved('12345', store)).toBe(false);
-
-    saveVideo(
-      {
-        id: '12345',
-        title: 'Overwatch SFM Animation',
-        url: `${origin}/video/12345/overwatch/`,
-        thumbUrl: 'https://thumb.jpg',
-        durationFormatted: '5:30',
-        ratingPercent: 96,
-        viewsFormatted: '25K',
-      },
-      store,
-    );
-
-    expect(isVideoSaved('12345', store)).toBe(true);
-    expect(getVideos(store).length).toBe(1);
-    expect(getTotalBookmarkCount(store)).toBe(1);
-
-    deleteVideo('12345', store);
-    expect(isVideoSaved('12345', store)).toBe(false);
-    expect(getVideos(store).length).toBe(0);
-    expect(getTotalBookmarkCount(store)).toBe(0);
+describe('watch store', () => {
+  beforeEach(() => {
+    setWatchStoreForTests(memStore());
   });
-});
 
-describe('formatSectorTitleFromUrl', () => {
-  it('formats human-readable cyber badges', () => {
-    expect(formatSectorTitleFromUrl(`${origin}/`)).toBe('FEED // LATEST');
-    expect(formatSectorTitleFromUrl(`${origin}/latest-updates/`)).toBe('FEED // LATEST');
-    expect(formatSectorTitleFromUrl(`${origin}/tags/futa/`)).toBe('TAG // FUTA');
-    expect(formatSectorTitleFromUrl(`${origin}/categories/3d/`)).toBe('CATEGORY // 3D');
-    expect(formatSectorTitleFromUrl(`${origin}/search/overwatch/?sort_by=post_date`)).toBe(
-      'SEARCH // OVERWATCH [POST_DATE]',
-    );
+  it('marks, unmarks, and toggles', () => {
+    expect(isWatched('123')).toBe(false);
+    markWatched('123');
+    expect(isWatched('123')).toBe(true);
+    unmarkWatched('123');
+    expect(isWatched('123')).toBe(false);
+    expect(toggleWatched('123')).toBe(true);
+    expect(toggleWatched('123')).toBe(false);
   });
-});
 
-describe('archive export and import', () => {
-  it('exports and imports archive JSON without duplicate ids', () => {
-    const store = memStore();
-    saveSector(
-      {
-        listKey: '/tags/futa/',
-        title: 'TAG // FUTA',
-        url: `${origin}/tags/futa/2/`,
-        page: 2,
-      },
-      store,
-    );
-    saveVideo(
-      {
-        id: '999',
-        title: 'Test Video',
-        url: `${origin}/video/999/test/`,
-        thumbUrl: '',
-        durationFormatted: '1:00',
-        ratingPercent: 90,
-        viewsFormatted: '1K',
-      },
-      store,
-    );
+  it('ignores ids that are not numeric', () => {
+    markWatched('../evil');
+    expect(isWatched('../evil')).toBe(false);
+  });
 
-    const exported = exportArchiveJson(store);
-    const store2 = memStore();
-    const result = importArchiveJson(exported, store2);
-    expect(result.success).toBe(true);
-    expect(result.sectorsAdded).toBe(1);
-    expect(result.videosAdded).toBe(1);
-    expect(getSectors(store2).length).toBe(1);
-    expect(getVideos(store2).length).toBe(1);
+  it('treats bad storage as empty and keeps only valid records', () => {
+    expect(parseWatchMap('not json')).toEqual({});
+    expect(parseWatchMap('[1,2]')).toEqual({});
+    expect(
+      parseWatchMap(JSON.stringify({ '1': { at: 5, manual: true }, x: { at: 1 }, '2': { at: 'no' } })),
+    ).toEqual({ '1': { at: 5, manual: true } });
+  });
 
-    // Importing again skips duplicates
-    const result2 = importArchiveJson(exported, store2);
-    expect(result2.sectorsAdded).toBe(0);
-    expect(result2.videosAdded).toBe(0);
+  it('prunes to the newest records', () => {
+    const map = {
+      '1': { at: 1, manual: false },
+      '2': { at: 3, manual: false },
+      '3': { at: 2, manual: false },
+    };
+    expect(Object.keys(pruneWatchMap(map, 2)).sort()).toEqual(['2', '3']);
+    expect(MAX_RECORDS).toBeGreaterThan(0);
   });
 });

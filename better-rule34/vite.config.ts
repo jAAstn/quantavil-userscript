@@ -10,9 +10,9 @@ export default defineConfig({
       userscript: {
         name: 'Better Rule34Video',
         namespace: 'https://github.com/quantavil/userscript/',
-        version: '1.5.0',
+        version: '2.0.0',
         description:
-          'Streamlined filter bar, instant client search & filtering, ad cleaner, and seamless auto next page infinite scroll for Rule34Video.',
+          'Rule34Video enhancements: in-sheet minimum rating and view count filters, seamless infinite scroll, viewport preview autoplay, watch history tracking, and ad cleanup.',
         match: [
           '*://*.rule34video.com/*',
           '*://rule34video.com/*',
@@ -25,3 +25,4 @@ export default defineConfig({
     }),
   ],
 });
+

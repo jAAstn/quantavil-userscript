@@ -2,11 +2,11 @@
  * Shared route helpers for Rule34Video (KVS CMS) listing URLs.
  *
  * Single source of truth for entity/catalog route shapes so autopager and
- * bookmark logic cannot drift apart. All functions are pure and unit-tested.
+ * archive logic cannot drift apart. All functions are pure and unit-tested.
  */
 
 /** Listing namespaces that address an entity: /tags/:id/, /categories/:slug/, ... */
-export const ENTITY_SEGMENTS = ['tags', 'categories', 'models', 'channels', 'playlists'] as const;
+const ENTITY_SEGMENTS = ['tags', 'categories', 'models', 'channels', 'playlists'] as const;
 
 /** Watch pages are never listings and never carry a page segment. */
 const NON_LISTING_SEGMENTS = [...ENTITY_SEGMENTS, 'video'] as const;
@@ -78,3 +78,4 @@ export function appendPageToPath(pathname: string, pageNum: number): string {
   if (pathname.endsWith('/')) return `${pathname}${pageNum}/`;
   return `${pathname}/${pageNum}/`;
 }
+

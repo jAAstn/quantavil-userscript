@@ -5,33 +5,35 @@
 > `vite.config.ts` back to `rule34video.com`, run `bun run build`, and
 > reinstall the userscript.
 
-Industrial brutalist userscript for [Rule34Video.com](https://rule34video.com/). Replaces native navigation and clutter with a floating vertical telemetry console, instant client-side filtering, card framing, ad removal, and infinite scroll.
+Adds in-sheet minimum rating and view count filters, seamless infinite scroll, viewport preview autoplay, watch history tracking, and ad cleanup.
 
-Zero emojis. Carbon substrate, monospace readouts, and neon hazard magenta (`#ff0055`) accents.
+## What it does
 
-## Features
-
-- **Vertical Console (`[ CTRL ]`)**: Bottom-right floating console (`290px`) with live search, 4 tactile sliders (Rating, Views, Duration, Vintage), 4 quick toggles (Sound, HD, Futa, Unwatched), and reset-to-defaults. Slider/toggle settings persist across visits; keyword search stays ephemeral by design.
-- **Open in New Tab**: Plain left-click on any card opens the video in a new tab (`noopener`); middle-click and Ctrl/Cmd-click keep native behavior. Clicked videos are remembered locally to power the Unwatched toggle.
-- **Page Bookmark (icon only)**: Small bookmark SVG button docked left of `[ CTRL ]`. Click saves the current page; click again jumps straight back to its URL (same tab, safe at any depth); right-click removes it. One bookmark per listing.
-- **Page Separators**: Infinite-scroll batches are divided by a `[ PAGE N ]` divider so you can tell which cards came from which page.
-- **Card Framing**: Substrate border framing with hover glow, clamped 2-line titles (`2.7em`), non-overlapping rating/views meta row, hidden relative time (`x min ago`), and hidden card comments (watch-page comments untouched).
-- **Native Player Integrity**: Leaves thumbnail time, sound, HD badges, video timeline scrubbers, and loading progress indicators unhindered by custom CSS so native site video preview works seamlessly.
-- **Auto Next Page**: Seamless infinite scroll that neutralizes container overflow clipping, carries active search queries, and fixes lazy-loaded thumbnails.
-- **Ad Removal**: Strips sponsored thumbs, redirect links, network banners, and iframe trackers.
+- **Min rating and min views:** two rows of choices at the bottom of the ALL FILTERS sheet, styled like the site's Date and Duration pills. Rating: Any, 50%+, 60%+, 70%+, 75%+, 80%+, 85%+, 90%+, 95%+. Views: Any, 1K+, 5K+, 10K+, 25K+, 50K+, 75K+, 100K+, 250K+, 500K+. They filter the cards on the page right away and are remembered in this browser. Clear all in the sheet resets them too. They apply to cards already loaded. A card whose rating or views can't be read is never hidden.
+- **Site filters (untouched):** Type, Quality, Date added, Duration, Sort, Tags, Categories, and Artists stay with the site and run on the server. Its "2 selected" counter and badge count only those.
+- **Watch history:** a video counts as watched after about 85% of it has played, or when you mark it. Watched cards are greyed out. History is kept in this browser's localStorage, newest 5,000 videos.
+  - **On a card:** a MARK button sits at the top-left of the thumbnail and is always visible. It turns into WATCHED when set.
+  - **On a video page:** "Mark watched" sits in the action row, next to Download and Share.
+- **Autoplay previews:** muted previews play on cards at least half on screen, on desktop and mobile, with no hover needed. Up to 12 play at once (6 on touch screens), most visible first. A failed clip is retried twice. A clip only shows once it is really playing. Watched cards are skipped. Autoplay starts off when the browser has data saver on. There is no toggle.
+- **Auto next page:** infinite scroll with `[ PAGE N ]` separators, using the site's own pagination. It stops after a repeated or empty page.
+- **Open in new tab:** a plain left-click opens the video in a new tab. Middle-click and modifier clicks behave as usual.
+- **Ad cleaner:** removes sponsored cards, sidebar and footer ads, and header promo buttons.
 
 ## Development
 
 ```bash
-bun install        # Install dependencies
-bun test           # Run unit tests
-bun run typecheck  # Typecheck TypeScript
-bun run build      # Build dist/better-rule34.user.js
+bun install        # or: npm install
+bun test           # unit tests
+bun run typecheck  # tsc
+bun run build      # writes dist/better-rule34.user.js
 ```
+
+## Smoke test
+
+After a build, `npm i --no-save jsdom && node smoke/run-smoke.mjs` runs the built script against small fixtures in a simulated DOM. It covers the sheet controls, marking and greying, autoplay and retries, auto next page, list swaps, and watch tracking on the video page. It does not test the live site.
 
 ## Installation
 
 1. Install [Violentmonkey](https://violentmonkey.github.io/) or [Tampermonkey](https://www.tampermonkey.net/).
-2. Load [`dist/better-rule34.user.js`](dist/better-rule34.user.js).
+2. Install `dist/better-rule34.user.js`.
 3. Open [rule34video.com](https://rule34video.com/).
-

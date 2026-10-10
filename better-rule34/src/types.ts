@@ -1,34 +1,12 @@
-export type FutaOption = 'all' | 'hide' | 'only';
-
+/** The few facts the client-side filter needs from a card. `null` means "could not be read". */
 export interface CardData {
   id: string;
-  title: string;
-  url: string;
-  previewUrl: string | null;
-  thumbUrl: string;
-  durationSeconds: number;
-  durationFormatted: string;
-  ratingPercent: number;
-  votesCount: number;
-  viewsCount: number;
-  viewsFormatted: string;
-  commentsCount: number;
-  hasSound: boolean;
-  isHd: boolean;
-  isFuta: boolean;
-  isWatched: boolean;
-  submittedAgo: string;
-  submittedYear: number;
+  ratingPercent: number | null;
+  viewsCount: number | null;
 }
 
+/** Client-side filters: only what the site itself does not offer. */
 export interface FilterState {
-  query: string;
-  soundOnly: boolean;
-  hdOnly: boolean;
-  futaFilter: FutaOption;
-  hideWatched: boolean;
   minRating: number;
   minViews: number;
-  minYear: number;
-  durationMinSeconds: number | null;
 }

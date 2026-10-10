@@ -2,24 +2,36 @@ import { describe, expect, it } from 'bun:test';
 import { parseNextLink } from '../src/autopager';
 import {
   DEFAULT_FILTER,
+  isAdCard,
   matchesClientFilter,
-  parseDuration,
-  parseRating,
-  parseSubmittedYear,
+  parseKvsParameters,
+  parseRatingPercent,
   parseViews,
   resolveNextPageUrl,
 } from '../src/parse';
 import type { CardData } from '../src/types';
 
 describe('parsers', () => {
-  it('parses duration, views, ratings, and year correctly', () => {
-    expect(parseDuration('10:53')).toBe(653);
-    expect(parseDuration('1:02:15')).toBe(3735);
+  it('parses views and ratings, and returns null for unreadable text', () => {
     expect(parseViews('4.9K')).toBe(4900);
     expect(parseViews('1.5M')).toBe(1500000);
-    expect(parseRating('81% (666)')).toEqual({ percent: 81, count: 666 });
-    expect(parseSubmittedYear('2 years ago', 2026)).toBe(2024);
-    expect(parseSubmittedYear('2023-05-12', 2026)).toBe(2023);
+    expect(parseViews('1,234')).toBe(1234);
+    expect(parseViews('')).toBeNull();
+    expect(parseViews('n/a')).toBeNull();
+    expect(parseRatingPercent('81% (666)')).toBe(81);
+    expect(parseRatingPercent('100%')).toBe(100);
+    expect(parseRatingPercent('')).toBeNull();
+    expect(parseRatingPercent('no votes')).toBeNull();
+  });
+
+  it('reads the page offset but never mistakes a date filter for one', () => {
+    expect(parseKvsParameters('sort_by:video_viewed;from:2')).toEqual({ fromParam: 2, sortBy: 'video_viewed' });
+    expect(parseKvsParameters('q:x;from_videos+from_albums:33')).toEqual({ fromParam: 33, sortBy: null });
+    expect(parseKvsParameters('post_date_from:2026-01-01;sort_by:post_date')).toEqual({
+      fromParam: null,
+      sortBy: 'post_date',
+    });
+    expect(parseKvsParameters('')).toEqual({ fromParam: null, sortBy: null });
   });
 
   it('preserves query parameters on next page URL resolution', () => {
@@ -77,36 +89,72 @@ describe('parsers', () => {
 });
 
 describe('matchesClientFilter', () => {
-  const card: CardData = {
-    id: '1',
-    title: 'Genshin Impact Animation',
-    url: 'https://rule34video.com/video/1/',
-    previewUrl: null,
-    thumbUrl: 'https://thumb.jpg',
-    durationSeconds: 200,
-    durationFormatted: '3:20',
-    ratingPercent: 95,
-    votesCount: 10,
-    viewsCount: 5000,
-    viewsFormatted: '5K',
-    commentsCount: 2,
-    hasSound: true,
-    isHd: true,
-    isFuta: false,
-    isWatched: false,
-    submittedAgo: '1 year ago',
-    submittedYear: 2025,
-  };
+  const card: CardData = { id: '1', ratingPercent: 95, viewsCount: 5000 };
 
-  it('evaluates filters accurately', () => {
+  it('applies the rating and views minimums', () => {
     expect(matchesClientFilter(card, DEFAULT_FILTER)).toBe(true);
-    expect(matchesClientFilter(card, { ...DEFAULT_FILTER, query: 'overwatch' })).toBe(false);
     expect(matchesClientFilter(card, { ...DEFAULT_FILTER, minRating: 98 })).toBe(false);
     expect(matchesClientFilter(card, { ...DEFAULT_FILTER, minViews: 10000 })).toBe(false);
-    expect(matchesClientFilter(card, { ...DEFAULT_FILTER, durationMinSeconds: 300 })).toBe(false);
-    expect(matchesClientFilter(card, { ...DEFAULT_FILTER, minYear: 2026 })).toBe(false);
-    expect(matchesClientFilter(card, { ...DEFAULT_FILTER, futaFilter: 'only' })).toBe(false);
-    expect(matchesClientFilter({ ...card, isFuta: true }, { ...DEFAULT_FILTER, futaFilter: 'hide' })).toBe(false);
+    expect(matchesClientFilter(card, { minViews: 1000, minRating: 90 })).toBe(true);
+  });
+
+  it('never hides a card whose rating or views could not be read', () => {
+    const unreadable: CardData = { id: '2', ratingPercent: null, viewsCount: null };
+    expect(matchesClientFilter(unreadable, { minRating: 90, minViews: 50000 })).toBe(true);
   });
 });
 
+describe('isAdCard', () => {
+  interface MockElOptions {
+    classes?: string[];
+    closestSpots?: boolean;
+    iframe?: boolean;
+    headerText?: string;
+    href?: string;
+    dataset?: Record<string, string>;
+  }
+
+  function makeMockCard(opts: MockElOptions): HTMLElement {
+    return {
+      classList: {
+        contains: (c: string) => opts.classes?.includes(c) ?? false,
+      },
+      closest: (sel: string) => (sel === '.spots' && opts.closestSpots ? ({} as HTMLElement) : null),
+      querySelector: (sel: string) => {
+        if (sel === 'iframe') return opts.iframe ? ({} as HTMLIFrameElement) : null;
+        if (sel === 'header') return opts.headerText !== undefined ? ({ textContent: opts.headerText } as HTMLElement) : null;
+        if (sel.includes('a')) {
+          return opts.href !== undefined
+            ? ({ getAttribute: (attr: string) => (attr === 'href' ? opts.href : null) } as unknown as HTMLAnchorElement)
+            : null;
+        }
+        return null;
+      },
+      dataset: opts.dataset ?? {},
+    } as unknown as HTMLElement;
+  }
+
+  it('detects sponsored/ad cards', () => {
+    expect(isAdCard(makeMockCard({ classes: ['spot-thumb'] }))).toBe(true);
+    expect(isAdCard(makeMockCard({ closestSpots: true }))).toBe(true);
+    expect(isAdCard(makeMockCard({ headerText: 'AD' }))).toBe(true);
+    expect(isAdCard(makeMockCard({ headerText: 'SPONSOR' }))).toBe(true);
+    expect(isAdCard(makeMockCard({ iframe: true }))).toBe(true);
+    expect(isAdCard(makeMockCard({ href: 'https://engine.sadbaguette.com/click' }))).toBe(true);
+    expect(isAdCard(makeMockCard({ href: '/v1/d.php?z=123' }))).toBe(true);
+    expect(isAdCard(makeMockCard({ href: 'https://s.ku34bh9la09.com/traffic' }))).toBe(true);
+    expect(isAdCard(makeMockCard({ href: 'https://external-adnetwork.com/click' }))).toBe(true);
+  });
+
+  it('never falsely flags legitimate non-video or album cards as ads', () => {
+    // Album cards
+    expect(isAdCard(makeMockCard({ href: '/album/123/my-album/' }))).toBe(false);
+    expect(isAdCard(makeMockCard({ href: 'https://rule34video.com/album/123/my-album/' }))).toBe(false);
+    // Playlist cards
+    expect(isAdCard(makeMockCard({ href: '/playlist/456/best-clips/' }))).toBe(false);
+    // Regular video cards
+    expect(isAdCard(makeMockCard({ dataset: { videoCardId: '123' }, href: '/video/123/clip/' }))).toBe(false);
+    expect(isAdCard(makeMockCard({ href: '/video/123/clip/' }))).toBe(false);
+    expect(isAdCard(makeMockCard({ href: 'https://rule34video.com/video/123/clip/' }))).toBe(false);
+  });
+});

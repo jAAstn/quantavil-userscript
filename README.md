@@ -58,7 +58,7 @@ A curated, production-grade monorepo of modern userscripts, browser extensions, 
 | **[greasey-fork-filter](./greasey-fork-filter)** | Persistent Greasy Fork script listing filter to hide low-quality scripts by install threshold, author, or keyword. |
 | **[reddit-manager](./reddit-manager)** | Bulk-management suite for Reddit to export/import subreddits, mass leave subscriptions, and batch overwrite/delete posts and comments. |
 | **[better-alternativeto](./better-alternativeto)** | AlternativeTo enhancer adding direct website/GitHub/app-store chips to cards, pinned compact filter bar with likes range, and accessible dark mode. |
-| **[better-rule34](./better-rule34)** | Rule34Video brutalist erotic latex enhancer featuring a floating bottom-right telemetry FAB, four tactile sliders (rating, views, duration, year), site-wide dark carbon/scanline theme, bulletproof auto-paging, and ad eradication. |
+| **[better-rule34](./better-rule34)** | Rule34Video enhancements: in-sheet minimum rating and view count filters, seamless infinite scroll, viewport preview autoplay, watch history tracking, and ad cleanup. |
 | **[omarchy-plugins-enhancer](./omarchy-plugins-enhancer)** | Omarchy Plugins catalog enhancer adding auto pager next (infinite scroll), direct GitHub repository links on cards, and seen plugin greying out. |
 | **[bpedia](./bpedia)** | Babepedia enhancer adding advanced multi-attribute filtering, glassmorphic badges, and thumbnail grid optimizations. |
 

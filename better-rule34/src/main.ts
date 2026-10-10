@@ -1,27 +1,43 @@
 import { cleanAds } from './adcleaner';
 import { AutoPager, findVideosContainer, isListingPage, readActiveSort, unclipBodyOverflow } from './autopager';
-import { canonicalListKey } from './bookmark';
-import { attachCardBookmarkButtons, mountBookmarkButton, type BookmarkHandle } from './bookmark-ui';
-import { FilterBar } from './filterbar';
-import { hardenAnchor, hardenAnchorsIn, initNewTab, isWatchedId } from './newtab';
-import { initNativeFilterPanel } from './nativefilter';
-import { extractCardData, isAdCard, matchesClientFilter } from './parse';
+import { AutoplayController } from './autoplay';
+import { decorateCard, paintCard } from './cardmark';
+import { hardenAnchorsIn, initNewTab } from './newtab';
+import { cardIdOf, extractCardData, isAdCard, matchesClientFilter } from './parse';
 import { isPaginationKey, stripPageSegment } from './routes';
+import { SheetFilter } from './sheetfilter';
 import { CSS } from './styles';
+import { isWatched, onWatchChange } from './watchstore';
+import { attachWatchTracker, mountWatchToggle } from './watchtrack';
 import type { CardData, FilterState } from './types';
 
-interface ManagedCard {
-  el: HTMLElement;
-  data: CardData;
-}
+/** Previews playing at once. Phones decode fewer clips at a time. */
+const MAX_ACTIVE_PREVIEWS = window.matchMedia?.('(pointer: coarse)').matches ? 6 : 12;
+const MIN_VISIBLE_RATIO = 0.5;
+/** After this many pages in a row add no visible card, auto-loading waits for a scroll. */
+const MAX_EMPTY_PAGES = 3;
+const SCAN_DELAY_MS = 100;
+/** Sections only the ALL FILTERS sheet has. Used to find the sheet body. */
+const SHEET_MARK = '[data-sec="date"], [data-sec="dur"]';
+/** Clear all in that sheet. */
+const SHEET_RESET = '.fs-sheet__foot [data-act="reset"]';
 
-let managedCards: ManagedCard[] = [];
-let filterBar: FilterBar | null = null;
-let autoPager: AutoPager | null = null;
+/** Card element to its parsed data. */
+const managed = new Map<HTMLElement, CardData>();
+let filterBar: SheetFilter | null = null;
 let currentFilter: FilterState | null = null;
-let bookmarkHandle: BookmarkHandle | null = null;
-let lastActiveSort: string | null = null;
-let awaitingAjaxReload = false;
+let autoPager: AutoPager | null = null;
+let autoplay: AutoplayController | null = null;
+/** Identifies the list last shown. A different key means the site replaced the list. */
+let lastListKey: string | null = null;
+let watchSubscribed = false;
+let emptyPages = 0;
+let scanTimer = 0;
+
+/** Data saver on: no autoplay. */
+function saveDataOn(): boolean {
+  return (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+}
 
 function injectStyles(): void {
   if (document.getElementById('br34-styles')) return;
@@ -31,276 +47,203 @@ function injectStyles(): void {
   (document.head || document.documentElement).append(style);
 }
 
-/** Overlay own click-history onto site watched flags (site marks unreliably). */
-function applyOwnWatched(el: HTMLElement, data: CardData): void {
-  if (data.id && isWatchedId(data.id)) {
-    data.isWatched = true;
-    el.classList.add('watched');
+/** Registers one card: parse it, add the watched toggle, and queue its preview. */
+function adopt(el: HTMLElement): void {
+  if (managed.has(el)) return;
+  if (isAdCard(el)) {
+    el.remove();
+    return;
   }
+  const data = extractCardData(el);
+  if (!data) return;
+  managed.set(el, data);
+  hardenAnchorsIn(el);
+  decorateCard(el, data.id, isWatched(data.id));
+  autoplay?.observe(el);
 }
 
 function scanCards(): void {
   const container = findVideosContainer();
   if (!container) return;
-
-  cleanAds(container);
-
-  const existingMap = new Map<HTMLElement, ManagedCard>();
-  for (const c of managedCards) {
-    existingMap.set(c.el, c);
+  for (const el of container.querySelectorAll<HTMLElement>('.item.thumb')) adopt(el);
+  for (const el of [...managed.keys()]) {
+    if (el.isConnected) continue;
+    managed.delete(el);
+    autoplay?.unobserve(el);
   }
-
-  const updatedCards: ManagedCard[] = [];
-  const cardElements = Array.from(container.querySelectorAll<HTMLElement>('.item.thumb'));
-
-  // Attach card bookmark ribbons to thumbnails
-  attachCardBookmarkButtons(cardElements, () => {
-    bookmarkHandle?.refresh();
-  });
-
-  for (const el of cardElements) {
-    if (isAdCard(el)) {
-      el.remove();
-      continue;
-    }
-
-    const existing = existingMap.get(el);
-    if (existing) {
-      applyOwnWatched(existing.el, existing.data);
-      updatedCards.push(existing);
-      continue;
-    }
-
-    const data = extractCardData(el);
-    if (data) {
-      applyOwnWatched(el, data);
-      updatedCards.push({ el, data });
-    }
-  }
-
-  managedCards = updatedCards;
 }
 
 function applyFilter(): void {
   if (!currentFilter) return;
-
-  let visibleCount = 0;
-  for (const card of managedCards) {
-    const isVisible = matchesClientFilter(card.data, currentFilter);
-    card.el.dataset.br34Hidden = isVisible ? 'false' : 'true';
-    if (isVisible) visibleCount++;
+  let visible = 0;
+  for (const [el, data] of managed) {
+    const ok = matchesClientFilter(data, currentFilter);
+    el.dataset.br34Hidden = ok ? 'false' : 'true';
+    if (ok) visible++;
   }
-
-  filterBar?.setCount(visibleCount, managedCards.length);
+  filterBar?.setCount(visible, managed.size);
 }
 
-/** Synchronizes the active sort parameter to the browser address bar without page reload. */
+function syncWatchState(): void {
+  for (const [el, data] of managed) paintCard(el, isWatched(data.id));
+  autoplay?.refresh();
+}
+
+/** Writes the active sort into the address bar without a reload. */
 function syncUrlSort(sortBy: string | null): void {
   try {
     const url = new URL(window.location.href);
-    if (sortBy) {
-      url.searchParams.set('sort_by', sortBy);
-    } else {
-      url.searchParams.delete('sort_by');
-    }
-    // Remove pagination offsets since this is page 1 of new sort
+    if (sortBy) url.searchParams.set('sort_by', sortBy);
+    else url.searchParams.delete('sort_by');
     for (const k of [...url.searchParams.keys()]) {
       if (isPaginationKey(k)) url.searchParams.delete(k);
     }
-    // Strip trailing page-number path segments (/2/)
     url.pathname = stripPageSegment(url.pathname);
     window.history.replaceState(window.history.state, '', url.toString());
   } catch {
-    // Ignore
+    // Address bar sync is cosmetic.
   }
 }
 
-/** Resets catalog state, AutoPager, and bookmark references after an AJAX sort or filter change. */
-function handleSortOrFilterReload(): void {
-  const currentSort = readActiveSort(document);
-  syncUrlSort(currentSort);
-  lastActiveSort = currentSort;
+/** Id of the first real card on the page. Ad cards have no id and are skipped. */
+function firstCardId(): string {
+  for (const el of findVideosContainer()?.querySelectorAll<HTMLElement>('.item.thumb') ?? []) {
+    const id = cardIdOf(el);
+    if (id) return id;
+  }
+  return '';
+}
+
+/**
+ * Identifies the list on screen: page, filters, sort, and newest card. It changes when the
+ * site swaps the list, whether that came from a sort, a filter, or Apply in the sheet.
+ */
+function currentListKey(): string {
+  const params = new URLSearchParams(window.location.search);
+  for (const k of [...params.keys()]) {
+    if (isPaginationKey(k) || k === 'sort_by') params.delete(k);
+  }
+  return `${window.location.pathname}?${params}|${readActiveSort(document) ?? ''}|${firstCardId()}`;
+}
+
+/** Puts the rating and views pills into the ALL FILTERS sheet body, if the sheet is on the page. */
+function mountSheetControls(): void {
+  if (!filterBar) return;
+  for (const body of document.querySelectorAll<HTMLElement>('.fs-sheet__body')) {
+    if (body.querySelector(SHEET_MARK)) {
+      filterBar.mount(body);
+      return;
+    }
+  }
+}
+
+function refresh(): void {
   unclipBodyOverflow();
   cleanAds();
-  initNativeFilterPanel();
-  managedCards = [];
+  mountSheetControls();
   scanCards();
   applyFilter();
+}
+
+/** The site replaced the list: start the list over. */
+function reloadList(): void {
+  syncUrlSort(readActiveSort(document));
+  managed.clear();
+  autoplay?.reset();
+  emptyPages = 0;
+  refresh();
   autoPager?.reset();
-  bookmarkHandle?.refresh();
+  lastListKey = currentListKey();
+}
+
+function onFilterChange(filter: FilterState): void {
+  currentFilter = filter;
+  emptyPages = 0;
+  applyFilter();
+  // A filter can leave the page too short to scroll. Pull in more until it fills.
+  autoPager?.nudge();
+}
+
+function onNewCards(els: HTMLElement[]): void {
+  for (const el of els) adopt(el);
+  applyFilter();
+  const anyVisible = els.some((el) => el.dataset.br34Hidden !== 'true');
+  emptyPages = anyVisible ? 0 : emptyPages + 1;
+  if (emptyPages < MAX_EMPTY_PAGES) autoPager?.nudge();
 }
 
 function boot(): void {
   injectStyles();
   unclipBodyOverflow();
   cleanAds();
-  hardenAnchorsIn(document);
   initNewTab(document);
 
-  // Watch pages: new-tab hardening + standalone archive access
   if (!isListingPage()) {
-    let dock = document.querySelector<HTMLElement>('.br34-dock');
-    if (!dock) {
-      dock = document.createElement('div');
-      dock.className = 'br34-dock';
-      document.body.append(dock);
-    }
-    const dummyFab = document.createElement('div');
-    dummyFab.style.display = 'none';
-    bookmarkHandle = mountBookmarkButton({
-      fab: dummyFab,
-      listKey: canonicalListKey(window.location.href),
-      getPage: () => 1,
-      getUrl: () => window.location.href,
-    });
+    attachWatchTracker();
+    mountWatchToggle();
     return;
   }
+  if (!findVideosContainer()) return;
 
-  const container = findVideosContainer();
-  if (!container) return;
-
-  // Collapse the bulky native filter panel (default collapsed, idempotent).
-  initNativeFilterPanel();
-
-  lastActiveSort = readActiveSort(document);
-  const listKey = canonicalListKey(window.location.href);
-
-  // Mount floating filter bar (FAB + Seductive Modal)
-  if (!filterBar || !filterBar.fabElement.isConnected) {
-    filterBar?.destroy();
-
-    filterBar = new FilterBar({
-      onFilterChange: (state) => {
-        currentFilter = state;
-        applyFilter();
-      },
-    });
-
-    currentFilter = filterBar.getState();
+  filterBar ??= new SheetFilter(onFilterChange);
+  currentFilter = filterBar.getFilter();
+  autoplay ??= new AutoplayController({
+    maxActive: MAX_ACTIVE_PREVIEWS,
+    minRatio: MIN_VISIBLE_RATIO,
+    enabled: !saveDataOn(),
+    isEligible: (card) => !card.classList.contains('br34-watched'),
+  });
+  if (!watchSubscribed) {
+    watchSubscribed = true;
+    onWatchChange(syncWatchState);
   }
 
-  // Scan currently existing video cards
-  scanCards();
-
-  // Initialize AutoPager
   if (!autoPager) {
-    autoPager = new AutoPager({
-      onNewCards: (newEls) => {
-        attachCardBookmarkButtons(newEls, () => {
-          bookmarkHandle?.refresh();
-        });
-        for (const el of newEls) {
-          for (const a of el.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"]')) {
-            hardenAnchor(a);
-          }
-          const data = extractCardData(el);
-          if (data) {
-            applyOwnWatched(el, data);
-            managedCards.push({ el, data });
-          } else {
-            // Unidentifiable card (no video id): drop instead of tracking.
-            el.remove();
-          }
-        }
-        applyFilter();
-      },
-      onPageLoaded: () => {
-        cleanAds();
-        unclipBodyOverflow();
-        initNativeFilterPanel();
-        bookmarkHandle?.refresh();
-      },
-    });
+    refresh();
+    autoPager = new AutoPager({ onNewCards });
     autoPager.init();
+    lastListKey = currentListKey();
+    return;
   }
-
-  applyFilter();
-
-  // Bookmark button docked next to the CTRL fab (idempotent on re-boot).
-  if (filterBar && autoPager) {
-    const pager = autoPager;
-    bookmarkHandle = mountBookmarkButton({
-      fab: filterBar.fabElement,
-      listKey,
-      getPage: () => pager.getCurrentPage(),
-      getUrl: () => pager.getCurrentPageUrl(),
-    });
-  }
+  if (currentListKey() !== lastListKey) reloadList();
+  else refresh();
 }
 
-// Watch for DOM mutations
-let scheduledTimer = 0;
 function scheduleScan(): void {
-  window.clearTimeout(scheduledTimer);
-  scheduledTimer = window.setTimeout(() => {
-    const currentSort = readActiveSort(document);
-    const sortChanged = currentSort !== lastActiveSort;
-    if (awaitingAjaxReload || sortChanged) {
-      awaitingAjaxReload = false;
-      handleSortOrFilterReload();
+  window.clearTimeout(scanTimer);
+  scanTimer = window.setTimeout(() => {
+    if (!isListingPage()) return;
+    // Cards that arrived after the first boot: set the page up now.
+    if (!filterBar) {
+      boot();
       return;
     }
-
-    unclipBodyOverflow();
-    cleanAds();
-    initNativeFilterPanel();
-    scanCards();
-    applyFilter();
-  }, 100);
+    if (currentListKey() !== lastListKey) reloadList();
+    else refresh();
+  }, SCAN_DELAY_MS);
 }
 
-// Listen for clicks on native sort chips or AJAX filter controls
-document.addEventListener(
-  'click',
-  (e) => {
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    const ajaxTrigger = target.closest<HTMLElement>(
-      '.filters-panel a[data-action="ajax"], .filters-panel .duration-filter__apply, [data-container-id*="sort_list"], #js-ajax_sort, #js-ajax_sort_custom',
-    );
-    if (ajaxTrigger) {
-      awaitingAjaxReload = true;
-    }
-  },
-  true,
-);
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    boot();
-  });
-} else {
-  boot();
-}
-
-// Ensure overflow:hidden wrapper is neutralized when jQuery ready fires
-window.addEventListener('load', () => {
-  unclipBodyOverflow();
-  boot();
+// Clear all in the ALL FILTERS sheet also clears the min rating and views.
+document.addEventListener('click', (e) => {
+  if (e.target instanceof Element && e.target.closest(SHEET_RESET)) filterBar?.reset();
 });
 
-const observer = new MutationObserver((mutations) => {
-  // If AutoPager is currently appending handled cards, skip redundant full DOM rescan
-  if (autoPager?.getIsAppending()) return;
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+// boot is idempotent. This pass catches parts of the page that render late.
+window.addEventListener('load', boot);
 
-  let shouldScan = false;
+new MutationObserver((mutations) => {
+  if (autoPager?.getIsAppending()) return;
+  let cards = false;
+  let sheet = false;
   for (const m of mutations) {
     for (const node of m.addedNodes) {
-      if (node instanceof HTMLElement) {
-        if (node.classList.contains('item') || node.querySelector?.('.item.thumb')) {
-          shouldScan = true;
-          break;
-        }
-      }
+      if (!(node instanceof HTMLElement)) continue;
+      cards ||= node.matches('.item.thumb') || !!node.querySelector('.item.thumb');
+      sheet ||= node.matches(SHEET_MARK) || !!node.querySelector(SHEET_MARK);
     }
-    if (shouldScan) break;
   }
-  if (shouldScan) {
-    scheduleScan();
-  }
-});
-
-observer.observe(document.body || document.documentElement, {
-  childList: true,
-  subtree: true,
-});
+  if (sheet) mountSheetControls();
+  if (cards) scheduleScan();
+}).observe(document.body || document.documentElement, { childList: true, subtree: true });
